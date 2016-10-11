@@ -1,0 +1,103 @@
+Sift Neural Network information
+
+
+9/21/16 - progress
+
+Constructed dataset using sift YCC transform generator and CIFAR-10
+dataset for real images. Have tested actual dataset with PIL:
+Image.fromarray(image_array).show()
+and it seems that things are happening the way they are suppposed to.
+
+The images are formed by first analyzing a batch of CIFAR images to
+determine range of their YCC transform coefficients. Images are then
+generated from within that range. At this time, random values that
+roughly fit the distributions (gaussian) of each transform coefficient
+independently.
+
+
+
+Have now tried to use 2-3 different learning systems with marginal
+results, but now things looks like they might work out. 
+
+The problem, specificially, is to identify which images (3072 RGB
+vectors) come from a real-world source (CIFAR) and which are generated
+(randomly or otherwise) via a YCrCb transform modeling those real
+images' distributions.
+
+Attempt 1: SVM (SVC & SVR with scikit-learn in python3) Not successful
+SVmachine could be convinced to correctly label dataset, but despite
+trying a wide array of values for gamma & C it failed to predict any
+validation set images.
+
+Even varying a single pixel's R value by +1 significantly changed the
+predicted value to nearly .5, changing just the one value by +150
+caused the prediction to revert to exactly 50%. 
+
+All external images score precisely 50% probability of coming from
+either distribution. POTENTIAL BUG THAT CAUSED THIS - training
+examples were strictly ordered (all 1, all 0) when they were used to
+train the system.
+
+Conclusions: The SVM is not learning the right kinds of features to
+differentiate between images and simulations of images.
+Abandon SVM and move into neural networks.
+
+
+
+Neural Network - feed forward with pybrain
+
+The Pybrain neural network system seems like a much likelier candidate
+for success. At this time, it has not been tested on any real images
+outside of its training set; however, it is clearly learning something
+about the images it is using.
+
+Earlier today, it acheived 80% accuracy on training set following
+around 10 epochs of training. It currently scores a majority of
+randomly generated images as random. It seems to me very likely that
+this system is capable of a precision/recall tradeoff that is
+acceptable for dramatically increasing the quality of presented images
+in SiFT.
+
+Earlier ran a test on 2000/2000 with 3072-256-8-1 network that
+achieved ca. 80% accuracy on training set in about one hour of
+training.
+
+It appears that a single hidden layer is not sufficient to find the
+kinds of features that are needed - error in a 3-layer network stayed
+notably higher after a few rounds of training than with additional
+layers. There is not an immediately perceptible change in training
+time...
+
+Optimizing the layer composition seems like a fruitful (but also
+interesting) path to take.
+
+Currently running a test with the followng parameters, results
+pending:
+
+Omega = 2000 real and 2000 generated images
+NetworK:
+3072 (input)
+256
+64
+8
+1 (output - 0-1)
+
+All parameters are defaults using build shortcut. 
+
+trainer.train() output is dropping below .105 after 10 iterations and
+appears likely to continue dropping substantially.
+
+Stats after 27 epochs of training:
+e = .090. 
+2653/4000 = 66% correct on unseen images from CIFAR
+799/1000 = 80% correct on generated images
+
+Pleased with results so far - resumed training with same 2000/2000
+sample dataset.
+
+
+error found after ca. 12 hours run time in Kivy.graphics.context.dealloc
+ Exception ignored in: 'kivy.graphics.context.Context.dealloc_vbo'
+ OverflowError: signed integer is greater than maximum
+ Exception ignored in: 'kivy.graphics.context.Context.dealloc_vertexbatch'
+ OverflowError: signed integer is greater than maximum
