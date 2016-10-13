@@ -95,9 +95,3 @@ e = .090.
 Pleased with results so far - resumed training with same 2000/2000
 sample dataset.
 
-
-error found after ca. 12 hours run time in Kivy.graphics.context.dealloc
- Exception ignored in: 'kivy.graphics.context.Context.dealloc_vbo'
- OverflowError: signed integer is greater than maximum
- Exception ignored in: 'kivy.graphics.context.Context.dealloc_vertexbatch'
- OverflowError: signed integer is greater than maximum

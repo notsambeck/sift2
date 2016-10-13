@@ -1,0 +1,30 @@
+ongoing bug & feature list. continue to delete resolved issues; indexed in Git
+
+# BUGS
+
+OCT 11 2016 - Kivy 
+error found after ca. 12 hours run time:
+repeated forever, program stalls:
+
+ Exception ignored in: 'kivy.graphics.context.Context.dealloc_vbo'
+ OverflowError: signed integer is greater than maximum
+ Exception ignored in: 'kivy.graphics.context.Context.dealloc_vertexbatch'
+ OverflowError: signed integer is greater than maximum
+
+
+
+
+
+# Features / todos
+
+1. Fix narrow generator (ie determine if there is a datatype error, or
+if the neural net is weak AF)
+
+2. Fix output to .pkl (mutable object problem?)
+
+3. Add gradient descent on images 
+
+4. make siftgen actually exhaustive
+
+5. implement a system that guarantees unique image feeds across
+multiple instances/runs of the program.

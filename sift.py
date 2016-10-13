@@ -14,7 +14,7 @@ import lasagne
 import pickle
 from lasagne import layers
 from lasagne.updates import nesterov_momentum
-from siftgen import nextImageNarrow, nextImageWide, quantization
+from dataset import nextTransformNarrow, nextTransformWide, quantization
 
 omega = 500    # number of images to analyze in CIFAR
 imageSize = 32  # number of 'pixels' in generated images
@@ -53,11 +53,11 @@ savednet = NeuralNet(
     verbose=1,
     regression=True)
 
-savednet.load_params_from('regression_0927.nn')
+savednet.load_params_from('net1000_161012.nn')
 
 
 class SiftWidget(Widget):
-    counter = np.zeros((3, 32, 32))
+    counter = np.zeros((3, 32, 32), dtype='float32')
     images_found = NumericProperty(0)
     images_shown = NumericProperty(0)
     best = 0.0
@@ -65,7 +65,7 @@ class SiftWidget(Widget):
 
     def update(self, dt):
         self.canvas.clear()
-        self.counter = np.add(self.counter, 9777)
+        self.counter = np.add(self.counter, 777)
         self.counter = np.mod(self.counter, quantization)
         self.showImage()
         self.showBest()
@@ -73,15 +73,15 @@ class SiftWidget(Widget):
     def showImage(self):
         # uses dataset.genycc on loaded data from pickle
         # t = dataset.genycc(cifarMaxTransform, cifarMinTransform, sigma='.03')
-        t = nextImageNarrow(self.counter)
+        t = nextTransformWide(self.counter)
         self.images_shown += 1
         self.updateBest = 0
         image = dataset.imY2R(dataset.idct(dataset.chop(t, 1)))
         toNet = np.zeros((1, 3, 32, 32), dtype='float32')
         toNet[0] = np.divide(np.subtract(image, 128.), 128.)
-        # p = savednet.predict(toNet)
+        p = savednet.predict(toNet)
         # turn off prediction
-        if False:  # [0, 0] >= .5:
+        if p[0, 0] >= .5:
             self.images_found += 1
             print('Image found, probabilty:', p, '%.   #',
                   self.images_found, 'of', self.images_shown)

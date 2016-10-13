@@ -6,7 +6,7 @@ import pickle
 from math import cos, pi
 import matplotlib.pyplot as plt
 
-omega = 2000
+omega = 10000
 imageSize = 32
 
 
@@ -23,6 +23,10 @@ def loadCifarTransforms():
     pkl_file.close()
     return (cifarMaxTransform, cifarMeanTransform,
             cifarMinTransform, cifarTransformDistribution)
+
+# loads pre-pickled dataset of 10k cifar images
+# cmax is matrix of maximum values of transform coefs, etc.
+cmax, cmean, cmin, cifartransforms = loadCifarTransforms()
 
 
 # import RGB CIFAR10 batch files from the web of 10k images as
@@ -48,7 +52,7 @@ def imR2Y(image):
     return out
 
 
-# coverts an image from YCC to RGB colorspace
+# coverts an image from YCC to RGB colorspace 0-255
 def imY2R(image):
     out = np.zeros((3, 32, 32), dtype='float32')
     for row in range(32):
@@ -56,13 +60,6 @@ def imY2R(image):
             out[:, row, col] = y2r(image[:, row, col])
     return out
 
-
-def im2vec(image):
-    return image.reshape((1, -1))
-
-
-def vec2im(vector):
-    return vector.reshape((3, 32, 32))
 
 # matrices for colorspace conversion #
 conversion = np.transpose(np.array([[65.738, 129.057, 25.064],
@@ -78,11 +75,12 @@ def r2y(pixel):
 
 
 # converts to 0-255 RGB pixel for Kivy display
+# note that this shoud be vectorized TODO
 def y2r(pixel):
     Y, Cb, Cr = np.divide(pixel, 256.)
-    R = 298.082 * Y + 408.583 * Cr - 222.921
-    G = 298.082 * Y - 100.291 * Cb - 208.120 * Cr + 135.576
-    B = 298.082 * Y + 516.412 * Cb - 276.836
+    R = max(min(255, 298.082 * Y + 408.583 * Cr - 222.921), 0)
+    G = max(min(255, 298.082 * Y - 100.291 * Cb - 208.120 * Cr + 135.576), 0)
+    B = max(min(255, 298.082 * Y + 516.412 * Cb - 276.836), 0)
     return np.array([R, G, B])
 
 
@@ -91,7 +89,7 @@ def y2r(pixel):
 
 # create DCT matrix for n x n image
 def dct_matrix(n):
-    d = np.ones((n, n))
+    d = np.ones((n, n), dtype='float32')
     d[0, :] = np.multiply(d[0, :], 1./(n**.5))
     for row in range(1, n):
         for col in range(n):
@@ -102,9 +100,9 @@ def dct_matrix(n):
 dctMatrix = dct_matrix(imageSize)
 
 
-# DCTII creates transform values from pixel values
+# DCTII creates YCC transform values from YCC pixel values
 def dct(img):
-    transform = np.ndarray(img.shape)
+    transform = np.ndarray(img.shape, dtype='float32')
     for i in range(img.ndim):
         # print img.shape, dctMatrix.shape, i
         transform[i] = np.dot(np.dot(dctMatrix, img[i]),
@@ -112,9 +110,9 @@ def dct(img):
     return transform
 
 
-# iDCT(II) creates pixel values from transform coefficients
+# iDCT(II) creates YCC pixel values from YCC transform coefficients
 def idct(trans):
-    img = np.ndarray(trans.shape)
+    img = np.ndarray(trans.shape, dtype='float32')
     for i in range(trans.ndim):
         # print trans.shape, dctMatrix.shape, i
         img[i] = np.dot(np.dot(np.transpose(dctMatrix), trans[i]),
@@ -135,12 +133,13 @@ def chop(trans, compression=1.0):
 def studyImages(dataset, numberOfImages=omega):
 
     # initialize result arrays:
-    cifarMaxTransform = np.zeros((3, 32, 32), float)
-    cifarMinTransform = np.multiply(np.ones((3, 32, 32), float), 100000)
-    total = np.zeros((3, 32, 32), float)
+    cifarMaxTransform = np.zeros((3, 32, 32), dtype='float32')
+    cifarMinTransform = dct(getImageYCC(0, dataset))
+    total = np.zeros((3, 32, 32), dtype='float32')
     # distribution is an arary: RGB transforms stacked numberOfImages deep
-    cifarTransformDistribution = np.zeros((numberOfImages, 3, 32, 32))
-
+    cifarTransformDistribution = np.zeros((numberOfImages, 3, 32, 32),
+                                          dtype='float32')
+    
     # loop through CIFAR images
     for i in range(numberOfImages):
         transform = dct(getImageYCC(i, dataset))
@@ -157,10 +156,44 @@ def studyImages(dataset, numberOfImages=omega):
     out.close()
 
 
+# dataset alternates real/fake...should be OK?
+def buildDataset(omega=omega, channels=3, n=4):
+    data = np.zeros((n*omega, channels, 32, 32), dtype='float32')
+    label = np.zeros(n*omega, dtype='uint8')
+    count = np.zeros((channels, 32, 32), dtype='float32')
+    for i in range(omega):
+        count = np.mod(np.add(count, 9777), quantization)
+        pos = imY2R(idct(cifartransforms[i]))
+        a = imY2R(idct(genycc(cmax, cmin)))
+        b = imY2R(idct(nextTransformWide(count)))
+        c = imY2R(idct(nextTransformNarrow(count)))
+        label[n*i] = 1
+        label[n*i+1] = 0
+        label[n*i+2] = 0
+        label[n*i+3] = 0
+        data[n*i] = pos
+        data[n*i+1] = a
+        data[n*i+2] = b
+        data[n*i+3] = c
+    # data broken up to 90% / 10% to use as desired
+    data = np.divide(np.subtract(data, 128.), 128.)
+    return (data[0:.9*n*omega], data[.9*n*omega:n*omega],
+            label[0:.9*n*omega], label[.9*n*omega:n*omega])
+
+
+def saveDataset(filename, x, xt, y, yt):
+    out = open('dataset1000_161012', 'wb')
+    pickle.dump(x, out)
+    pickle.dump(xt, out)
+    pickle.dump(y, out)
+    pickle.dump(yt, out)
+    out.close()
+
+
 def genycc(transformMax, transformMin, chopPoint=32, center=.5, sigma=.01):
     # generates YCC transform according to normal distribution
     # between two limit matrices generated from CIFAR
-    out = np.zeros((3, 32, 32))  # output will be a RGB array
+    out = np.zeros((3, 32, 32), dtype='float32')
     rando = np.random.normal(loc=center, scale=sigma,
                              size=(3, 32, 32))
     out = np.add(transformMin,
@@ -210,3 +243,40 @@ def plotHistogram(data, x_range=1, y_range=1, color_range=1):
                 plt.hist(data[:, i, j, k], 50, label=l)
     plt.legend(loc='upper right')
     plt.show()
+
+quantization = np.array(range(3172, 100, -1),
+                        dtype='float32').reshape((3, 32, 32), order='F')
+# placeholder (non-prime) list of quantization values will appear to work
+
+
+def getStdDev(imageArray):
+    out = np.zeros((3, 32, 32), dtype='float32')
+    for row in range(32):
+        for col in range(32):
+            for chan in range(3):
+                out[chan, row, col] = imageArray[:, chan, row, col].std()
+    return out
+
+cstd = getStdDev(cifartransforms)
+clow = np.subtract(cmean, cstd)
+
+
+# count neeeds to be float32 dtype
+def nextTransformWide(count, quantization=quantization):
+    if count.dtype != 'float32':
+        raise ValueError(count.dtype)
+    transform = np.add(cmin, np.multiply(np.divide(np.subtract(cmax,
+                                                               cmin),
+                                                   quantization),
+                                         count))
+    return transform
+
+
+def nextTransformNarrow(count, quantization=quantization):
+    if count.dtype != 'float32':
+        raise ValueError(count.dtype)
+    transform = np.add(clow, np.multiply(np.divide(np.multiply(2.0,
+                                                               cstd),
+                                                   quantization),
+                                         count))
+    return transform
