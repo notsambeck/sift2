@@ -16,10 +16,14 @@ from lasagne import layers
 from lasagne.updates import nesterov_momentum
 from dataset import nextTransformNarrow, nextTransformWide, quantization
 
+# all important increment
+increment = 33333
+
+
 omega = 500    # number of images to analyze in CIFAR
 imageSize = 32  # number of 'pixels' in generated images
-scaleL = 23      # number of screen pixels for big, small
-scaleS = 11
+scaleL = 22      # number of screen pixels for big, small
+scaleS = 22
 # scale is number of screen pixels per SIFT pixel
 
 
@@ -53,7 +57,7 @@ savednet = NeuralNet(
     verbose=1,
     regression=True)
 
-savednet.load_params_from('net1000_161012.nn')
+savednet.load_params_from('clampeddata10000_161013.nn')
 
 
 class SiftWidget(Widget):
@@ -61,11 +65,11 @@ class SiftWidget(Widget):
     images_found = NumericProperty(0)
     images_shown = NumericProperty(0)
     best = 0.0
-    bestImage = np.zeros((3, 32, 32))
+    bestImage = np.zeros((3, imageSize, imageSize))
 
     def update(self, dt):
         self.canvas.clear()
-        self.counter = np.add(self.counter, 777)
+        self.counter = np.add(self.counter, increment)
         self.counter = np.mod(self.counter, quantization)
         self.showImage()
         self.showBest()
@@ -73,10 +77,10 @@ class SiftWidget(Widget):
     def showImage(self):
         # uses dataset.genycc on loaded data from pickle
         # t = dataset.genycc(cifarMaxTransform, cifarMinTransform, sigma='.03')
-        t = nextTransformWide(self.counter)
+        t = nextTransformNarrow(self.counter)
         self.images_shown += 1
         self.updateBest = 0
-        image = dataset.imY2R(dataset.idct(dataset.chop(t, 1)))
+        image = dataset.imY2R(dataset.idct(t))
         toNet = np.zeros((1, 3, 32, 32), dtype='float32')
         toNet[0] = np.divide(np.subtract(image, 128.), 128.)
         p = savednet.predict(toNet)
@@ -85,10 +89,9 @@ class SiftWidget(Widget):
             self.images_found += 1
             print('Image found, probabilty:', p, '%.   #',
                   self.images_found, 'of', self.images_shown)
-            filename = open('foundImages.pkl', 'wb')
-            
+            # filename = open('foundImages.pkl', 'wb')
             # pickle.dump(image, filename)
-            filename.close()
+            # filename.close()
             self.best = p[0, 0]
             self.bestImage = np.divide(image, 255.)
 
@@ -97,7 +100,7 @@ class SiftWidget(Widget):
                 for i in range(imageSize):
                     pixel = np.divide(image[:, j, i], 255.)
                     Color(*pixel)
-                    Rectangle(pos=(i*scaleL, (31-j)*scaleL),
+                    Rectangle(pos=(i*scaleL, (imageSize-1-j)*scaleL),
                               size=(scaleL, scaleL))
 
     def showBest(self):
@@ -106,7 +109,8 @@ class SiftWidget(Widget):
                 for i in range(imageSize):
                     pixel = self.bestImage[:, j, i]
                     Color(*pixel)
-                    Rectangle(pos=(i*scaleS + 33*scaleL, (66-j)*scaleS),
+                    Rectangle(pos=(i*scaleS + (imageSize+1)*scaleL,
+                                   (imageSize-1-j)*scaleS),
                               size=(scaleS, scaleS))
 
 

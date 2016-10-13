@@ -7,7 +7,6 @@ from math import cos, pi
 import matplotlib.pyplot as plt
 
 omega = 10000
-imageSize = 32
 
 
 # LOAD CIFAR TRANSFORMS from pickle made in studyImages:
@@ -61,6 +60,15 @@ def imY2R(image):
     return out
 
 
+# coverts an image from YCC to RGB colorspace 0-255
+def imY2R128(image):
+    out = np.zeros((3, 64, 64), dtype='float32')
+    for row in range(64):
+        for col in range(64):
+            out[:, row, col] = y2r(image[:, row, col])
+    return out
+
+
 # matrices for colorspace conversion #
 conversion = np.transpose(np.array([[65.738, 129.057, 25.064],
                                     [-37.945, -74.494, 112.439],
@@ -97,13 +105,14 @@ def dct_matrix(n):
     return(d)
 
 
-dctMatrix = dct_matrix(imageSize)
+dctMatrix = dct_matrix(32)
+dctMatrix128 = dct_matrix(64)
 
 
 # DCTII creates YCC transform values from YCC pixel values
 def dct(img):
     transform = np.ndarray(img.shape, dtype='float32')
-    for i in range(img.ndim):
+    for i in range(img.shape[0]):
         # print img.shape, dctMatrix.shape, i
         transform[i] = np.dot(np.dot(dctMatrix, img[i]),
                               np.transpose(dctMatrix))
@@ -113,10 +122,22 @@ def dct(img):
 # iDCT(II) creates YCC pixel values from YCC transform coefficients
 def idct(trans):
     img = np.ndarray(trans.shape, dtype='float32')
-    for i in range(trans.ndim):
+    for i in range(trans.shape[0]):
         # print trans.shape, dctMatrix.shape, i
         img[i] = np.dot(np.dot(np.transpose(dctMatrix), trans[i]),
                         dctMatrix)
+    return img
+
+
+# iDCT64(II) creates YCC pixel values from YCC transform coefficients
+def idct128(trans):
+    img = np.ndarray((3, 64, 64), dtype='float32')
+    pad = np.zeros((3, 64, 64), dtype='float32')
+    pad[:, :32, :32] = trans
+    for i in range(1):
+        # print trans.shape, dctMatrix.shape, i
+        img[i] = np.dot(np.dot(np.transpose(dctMatrix128), pad[i]),
+                        dctMatrix128)
     return img
 
 
@@ -162,7 +183,10 @@ def buildDataset(omega=omega, channels=3, n=4):
     label = np.zeros(n*omega, dtype='uint8')
     count = np.zeros((channels, 32, 32), dtype='float32')
     for i in range(omega):
-        count = np.mod(np.add(count, 9777), quantization)
+        c = 100*i/omega
+        if round(c) == c:
+            print(c, ' % (maybe)')
+        count = np.mod(np.add(count, 777), quantization)
         pos = imY2R(idct(cifartransforms[i]))
         a = imY2R(idct(genycc(cmax, cmin)))
         b = imY2R(idct(nextTransformWide(count)))
