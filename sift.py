@@ -12,18 +12,18 @@ import dataset
 from nolearn.lasagne import NeuralNet
 import lasagne
 import pickle
+from PIL import Image
 from lasagne import layers
 from lasagne.updates import nesterov_momentum
-from dataset import nextTransformNarrow, nextTransformWide, quantization
+from dataset import nextTransformNarrow, quantization
 
 # all important increment
 increment = 33333
 
-
 omega = 500    # number of images to analyze in CIFAR
 imageSize = 32  # number of 'pixels' in generated images
-scaleL = 22      # number of screen pixels for big, small
-scaleS = 22
+scaleL = 20      # number of screen pixels for big, small
+scaleS = 20
 # scale is number of screen pixels per SIFT pixel
 
 
@@ -60,6 +60,11 @@ savednet = NeuralNet(
 savednet.load_params_from('clampeddata10000_161013.nn')
 
 
+class ImagePickler(pickle.Pickler):
+    def persistent_id(self, obj):
+        return(obj[1])
+
+
 class SiftWidget(Widget):
     counter = np.zeros((3, 32, 32), dtype='float32')
     images_found = NumericProperty(0)
@@ -78,21 +83,21 @@ class SiftWidget(Widget):
         # uses dataset.genycc on loaded data from pickle
         # t = dataset.genycc(cifarMaxTransform, cifarMinTransform, sigma='.03')
         t = nextTransformNarrow(self.counter)
-        self.images_shown += 1
         self.updateBest = 0
         image = dataset.imY2R(dataset.idct(t))
         toNet = np.zeros((1, 3, 32, 32), dtype='float32')
         toNet[0] = np.divide(np.subtract(image, 128.), 128.)
-        p = savednet.predict(toNet)
+        p = savednet.predict(toNet)[0, 0]
         # turn off prediction
-        if p[0, 0] >= .5:
+        if p >= .5:
+            prob = str(p)[:3]
             self.images_found += 1
             print('Image found, probabilty:', p, '%.   #',
                   self.images_found, 'of', self.images_shown)
-            # filename = open('foundImages.pkl', 'wb')
-            # pickle.dump(image, filename)
-            # filename.close()
-            self.best = p[0, 0]
+            s = Image.fromarray(dataset.pillify(image))
+            s.save(''.join(['found/', str(self.images_found), '_',
+                            prob, '.png']))
+            self.best = max(self.best, p)
             self.bestImage = np.divide(image, 255.)
 
         with self.canvas:
@@ -157,3 +162,4 @@ class CifarWidget(Widget):
                     Color(*image[:, j, i])
                     Rectangle(pos=(i*scaleS+33*scaleL, (32-j)*scaleS),
                               size=(scaleS, scaleS))
+
