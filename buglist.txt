@@ -17,10 +17,20 @@ repeated forever, program stalls:
 
 # Features / todos
 
+FIXED
 1. Fix narrow generator (ie determine if there is a datatype error, or
 if the neural net is weak AF)
+Problem(s) were: 
+A. It appears that in practice, arbitrary combinations of DCT
+coeficients from inside std. dev. range are not necessarily 0-255.
+Soltution - clamp output values.
+B. Not totally clear, but some values were float32 and some
+uint8. nolearn net takes float32 so changed all dtypes
 
+FIXED
 2. Fix output to .pkl (mutable object problem?)
+Save images to .png with PIL
+
 
 3. Add gradient descent on images 
 
@@ -28,3 +38,5 @@ if the neural net is weak AF)
 
 5. implement a system that guarantees unique image feeds across
 multiple instances/runs of the program.
+
+6. kivy over buffer error

@@ -90,7 +90,7 @@ class SiftWidget(Widget):
         p = savednet.predict(toNet)[0, 0]
         # turn off prediction
         if p >= .5:
-            prob = str(p)[:3]
+            prob = str(p)[2:5]
             self.images_found += 1
             print('Image found, probabilty:', p, '%.   #',
                   self.images_found, 'of', self.images_shown)
