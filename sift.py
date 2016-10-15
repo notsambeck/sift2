@@ -18,7 +18,7 @@ from lasagne.updates import nesterov_momentum
 from dataset import nextTransformNarrow, quantization
 
 # all important increment
-increment = 33333
+increment = 199
 
 omega = 500    # number of images to analyze in CIFAR
 imageSize = 32  # number of 'pixels' in generated images
@@ -34,6 +34,8 @@ savednet = NeuralNet(
     layers=[('input', layers.InputLayer),
             ('conv2d1', layers.Conv2DLayer),
             ('maxpool1', layers.MaxPool2DLayer),
+            ('conv2d2', layers.Conv2DLayer),
+            ('maxpool2', layers.MaxPool2DLayer),
             ('dropout1', layers.DropoutLayer),
             ('dense', layers.DenseLayer),
             ('dropout2', layers.DropoutLayer),
@@ -44,6 +46,10 @@ savednet = NeuralNet(
     conv2d1_nonlinearity=lasagne.nonlinearities.rectify,
     conv2d1_W=lasagne.init.GlorotUniform(),
     maxpool1_pool_size=(2, 2),
+    conv2d2_num_filters=32,
+    conv2d2_filter_size=(5, 5),
+    conv2d2_nonlinearity=lasagne.nonlinearities.rectify,
+    maxpool2_pool_size=(2, 2),
     dropout1_p=0.2,
     dense_num_units=256,
     dense_nonlinearity=lasagne.nonlinearities.rectify,
@@ -57,7 +63,7 @@ savednet = NeuralNet(
     verbose=1,
     regression=True)
 
-savednet.load_params_from('clampeddata10000_161013.nn')
+savednet.load_params_from('doubleconv_v0.nn')
 
 
 class ImagePickler(pickle.Pickler):
@@ -84,18 +90,18 @@ class SiftWidget(Widget):
         # t = dataset.genycc(cifarMaxTransform, cifarMinTransform, sigma='.03')
         t = nextTransformNarrow(self.counter)
         self.updateBest = 0
+        self.images_shown += 1
         image = dataset.imY2R(dataset.idct(t))
         toNet = np.zeros((1, 3, 32, 32), dtype='float32')
         toNet[0] = np.divide(np.subtract(image, 128.), 128.)
         p = savednet.predict(toNet)[0, 0]
-        # turn off prediction
-        if p >= .5:
-            prob = str(p)[2:5]
+        if p >= .45:
+            prob = str(p)[2:4]
             self.images_found += 1
-            print('Image found, probabilty:', p, '%.   #',
+            print('Image found, probabilty:', prob, '%.   #',
                   self.images_found, 'of', self.images_shown)
             s = Image.fromarray(dataset.pillify(image))
-            s.save(''.join(['found/', str(self.images_found), '_',
+            s.save(''.join(['foundDualConv/', str(self.images_found), '_',
                             prob, '.png']))
             self.best = max(self.best, p)
             self.bestImage = np.divide(image, 255.)

@@ -14,6 +14,8 @@ omega = 10000
 # Max, Mean, Min, Distribution = loadCifarTransforms() This should be
 # the only function needed in main app once the pickle is constructed.
 def loadCifarTransforms():
+    # cifar-10 filename: cifarTransforms.pkl
+    # cifar-100 (all 50k):
     pkl_file = open('cifarTransforms.pkl', 'rb')
     cifarTransformDistribution = pickle.load(pkl_file)
     cifarMaxTransform = pickle.load(pkl_file)
@@ -31,15 +33,16 @@ cmax, cmean, cmin, cifartransforms = loadCifarTransforms()
 # import RGB CIFAR10 batch files from the web of 10k images as
 # cifardata, cifarlabels
 def importCifar():
-    for i in range(1, 2):
-        fo = open('data_batch_'+str(i)+'.pkl', 'rb')
-        u = pickle._Unpickler(fo)
-        u.encoding = 'Latin1'
-        cifar_data = u.load()
-        fo.close()
+    # cifar 10 data in batches 1-5, cifar-100 1 file
+    fo = open('cifar100.pkl', 'rb')
+    u = pickle._Unpickler(fo)
+    u.encoding = 'Latin1'
+    cifar_data = u.load()
+    fo.close()
     cifardata = cifar_data['data']
-    cifarlabels = cifar_data['labels']
-    return(cifardata, cifarlabels)
+    print('Imported dataset. Samples:', len(cifardata), ', shape:',
+          cifardata.shape)
+    return cifardata
 
 
 # coverts an image from RGB to YCC colorspace
@@ -168,6 +171,9 @@ def studyImages(dataset, numberOfImages=omega):
         cifarMinTransform = np.minimum(cifarMinTransform, transform)
         total = np.add(total, transform)
         cifarTransformDistribution[i] = transform
+        pct = i/numberOfImages*100
+        if round(pct) == pct:
+            print(''.join(str(pct), '%...'))
     cifarMeanTransform = np.divide(total, numberOfImages)
     out = open('cifarTransforms.pkl', 'wb')
     pickle.dump(cifarTransformDistribution, out)
@@ -177,20 +183,27 @@ def studyImages(dataset, numberOfImages=omega):
     out.close()
 
 
+quantization = np.array(range(3172, 100, -1),
+                        dtype='float32').reshape((3, 32, 32), order='F')
+# placeholder (non-prime) list of quantization values will appear to work
+
+
 # dataset alternates real/fake...should be OK?
 def buildDataset(omega=omega, channels=3, n=4):
     data = np.zeros((n*omega, channels, 32, 32), dtype='float32')
     label = np.zeros(n*omega, dtype='uint8')
     count = np.zeros((channels, 32, 32), dtype='float32')
+    count2 = np.zeros((channels, 32, 32), dtype='float32')
     for i in range(omega):
-        c = 100*i/omega
-        if round(c) == c:
-            print(c, ' % (maybe)')
-        count = np.mod(np.add(count, 777), quantization)
+        pct = 100*i/omega
+        if round(pct) == pct:
+            print("".join([str(pct), '% ...']))
+        count = np.mod(np.add(count, 7777.), quantization)
+        count2 = np.mod(np.add(count2, 333.), quantization)
         pos = imY2R(idct(cifartransforms[i]))
         a = imY2R(idct(genycc(cmax, cmin)))
-        b = imY2R(idct(nextTransformWide(count)))
-        c = imY2R(idct(nextTransformNarrow(count)))
+        b = imY2R(idct(nextTransformNarrow(count)))
+        c = imY2R(idct(nextTransformNarrow(count2)))
         label[n*i] = 1
         label[n*i+1] = 0
         label[n*i+2] = 0
@@ -206,7 +219,7 @@ def buildDataset(omega=omega, channels=3, n=4):
 
 
 def saveDataset(filename, x, xt, y, yt):
-    out = open('dataset1000_161012', 'wb')
+    out = open('cifar100_mixed_dataset_161012', 'wb')
     pickle.dump(x, out)
     pickle.dump(xt, out)
     pickle.dump(y, out)
@@ -223,7 +236,7 @@ def genycc(transformMax, transformMin, chopPoint=32, center=.5, sigma=.01):
     out = np.add(transformMin,
                  np.multiply(np.subtract(transformMax, transformMin),
                              rando))
-    for i in range(chopPoint, imageSize):
+    for i in range(chopPoint, 32):
         out[:, :, i] = 0
         out[:, i, :] = 0
     return(out)
@@ -267,10 +280,6 @@ def plotHistogram(data, x_range=1, y_range=1, color_range=1):
                 plt.hist(data[:, i, j, k], 50, label=l)
     plt.legend(loc='upper right')
     plt.show()
-
-quantization = np.array(range(3172, 100, -1),
-                        dtype='float32').reshape((3, 32, 32), order='F')
-# placeholder (non-prime) list of quantization values will appear to work
 
 
 def getStdDev(imageArray):
