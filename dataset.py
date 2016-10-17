@@ -5,6 +5,7 @@ import numpy as np
 import pickle
 from math import cos, pi
 import matplotlib.pyplot as plt
+from PIL import Image
 
 omega = 10000
 
@@ -59,30 +60,43 @@ def imY2R(image):
     out = np.zeros((3, 32, 32), dtype='float32')
     for row in range(32):
         for col in range(32):
-            out[:, row, col] = y2r(image[:, row, col])
+            out[:, row, col] = y2rVector(image[:, row, col])
     return out
 
 
 # coverts an image from YCC to RGB colorspace 0-255
-def imY2R128(image):
-    out = np.zeros((3, 64, 64), dtype='float32')
-    for row in range(64):
-        for col in range(64):
+def imY2Rbig(image, resolution=64):
+    out = np.zeros((3, resolution, resolution), dtype='float32')
+    for row in range(resolution):
+        for col in range(resolution):
             out[:, row, col] = y2r(image[:, row, col])
     return out
 
 
 # matrices for colorspace conversion #
-conversion = np.transpose(np.array([[65.738, 129.057, 25.064],
-                                    [-37.945, -74.494, 112.439],
-                                    [112.439, -94.154, -18.285]]))
-addition = np.array([16., 128., 128.])
+r2yconversion = np.transpose(np.array([[65.738, 129.057, 25.064],
+                                       [-37.945, -74.494, 112.439],
+                                       [112.439, -94.154, -18.285]]))
+r2yaddition = np.array([16., 128., 128.])
 
 
-# converts a pixel from RGB to YCC colorspace using above matrices #
+# converts a pixel from RGB to YCbCr colorspace using above matrices #
 def r2y(pixel):
-    YCC = np.dot(np.divide(pixel, 256.), conversion)
-    return np.add(YCC, addition)
+    YCC = np.dot(np.divide(pixel, 256.), r2yconversion)
+    return np.add(YCC, r2yaddition)
+
+y2rMult = np.transpose(np.array([[298.082, 0., 408.583],
+                                 [298.082, -100.291, -208.120],
+                                 [298.082, 516.412, 0]]))
+y2rAdd = np.array([-222.921, 135.576, -276.836])
+
+
+# y2r vector implements same conversion as below but faster
+# leaving old version as a reference
+def y2rVector(YCCpixel):
+    rgb = np.add(np.dot(np.divide(YCCpixel, 256.), y2rMult), y2rAdd)
+    np.clip(rgb, 0, 255, out=rgb)
+    return rgb
 
 
 # converts to 0-255 RGB pixel for Kivy display
@@ -173,7 +187,7 @@ def studyImages(dataset, numberOfImages=omega):
         cifarTransformDistribution[i] = transform
         pct = i/numberOfImages*100
         if round(pct) == pct:
-            print(''.join(str(pct), '%...'))
+            print(''.join([str(pct), '%...']))
     cifarMeanTransform = np.divide(total, numberOfImages)
     out = open('cifarTransforms.pkl', 'wb')
     pickle.dump(cifarTransformDistribution, out)
@@ -189,7 +203,7 @@ quantization = np.array(range(3172, 100, -1),
 
 
 # dataset alternates real/fake...should be OK?
-def buildDataset(omega=omega, channels=3, n=4):
+def buildDataset(omega, channels=3, n=4, compression=1.0):
     data = np.zeros((n*omega, channels, 32, 32), dtype='float32')
     label = np.zeros(n*omega, dtype='uint8')
     count = np.zeros((channels, 32, 32), dtype='float32')
@@ -198,33 +212,44 @@ def buildDataset(omega=omega, channels=3, n=4):
         pct = 100*i/omega
         if round(pct) == pct:
             print("".join([str(pct), '% ...']))
-        count = np.mod(np.add(count, 7777.), quantization)
-        count2 = np.mod(np.add(count2, 333.), quantization)
-        pos = imY2R(idct(cifartransforms[i]))
-        a = imY2R(idct(genycc(cmax, cmin)))
-        b = imY2R(idct(nextTransformNarrow(count)))
-        c = imY2R(idct(nextTransformNarrow(count2)))
+        count = np.mod(np.add(count, 199.), quantization)
+        count2 = np.mod(np.add(count2, 33334.), quantization)
+        pos = imY2R(idct(chop(cifartransforms[i], compression)))
+        pos2 = imY2R(idct(chop(cifartransforms[i+omega], compression)))
+        b = imY2R(idct(chop(nextTransformNarrow(count), compression)))
+        c = imY2R(idct(chop(nextTransformNarrow(count2), compression)))
         label[n*i] = 1
-        label[n*i+1] = 0
+        label[n*i+1] = 1
         label[n*i+2] = 0
         label[n*i+3] = 0
         data[n*i] = pos
-        data[n*i+1] = a
+        data[n*i+1] = pos2
         data[n*i+2] = b
         data[n*i+3] = c
     # data broken up to 90% / 10% to use as desired
     data = np.divide(np.subtract(data, 128.), 128.)
     return (data[0:.9*n*omega], data[.9*n*omega:n*omega],
-            label[0:.9*n*omega], label[.9*n*omega:n*omega])
+    label[0:.9*n*omega], label[.9*n*omega:n*omega])
 
 
+# used 10/15 to save full cifar 100 datatset, should be good to go.
 def saveDataset(filename, x, xt, y, yt):
-    out = open('cifar100_mixed_dataset_161012', 'wb')
+    out = open(filename, 'wb')
     pickle.dump(x, out)
     pickle.dump(xt, out)
     pickle.dump(y, out)
     pickle.dump(yt, out)
     out.close()
+
+
+def loadDataset(filename):
+    f = open(filename, 'rb')
+    x = pickle.load(f)
+    xt = pickle.load(f)
+    y = pickle.load(f)
+    yt = pickle.load(f)
+    f.close()
+    return x, xt, y, yt
 
 
 def genycc(transformMax, transformMin, chopPoint=32, center=.5, sigma=.01):
@@ -264,11 +289,18 @@ def getImageYCC(n, dataset):
     return(imR2Y(getImage255(n, dataset)))
 
 
-def pillify(image):
+# reorder an image to 32,32,3 for PIL Image
+def orderPIL(image):
     out = np.zeros((32, 32, 3), dtype='uint8')
     for i in range(3):
         out[:, :, i] = image[i]
     return out
+
+
+# convert from -1 -> 1 data to PIL image
+def toPIL(data):
+    return Image.fromarray(orderPIL(np.add(np.multiply(data, 128.),
+                                           128.)))
 
 
 def plotHistogram(data, x_range=1, y_range=1, color_range=1):

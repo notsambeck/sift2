@@ -95,3 +95,27 @@ e = .090.
 Pleased with results so far - resumed training with same 2000/2000
 sample dataset.
 
+
+I am trying to use a (Python/lasagne/nolearn) neural network semi-backward in generating images. I'm hoping there is an easy way to use the (already trained network's) loss function's gradient with respect to the images it is classifying to find local minima (i.e. the most image-y images in that region) and am not finding any information.
+
+Maybe I just don't know what this problem is called?
+
+Full backstory: I am working on an image generator, currently in Python. The goal is to find new images of interesting stuff. What it does:
+
+Loads the CIFAR-10 dataset as reference for what images look like
+Generates new 'plausible images' in the same space as JPEG-compressed versions of CIFAR (big space, but much blobbier & smaller than random pixels) and then converts them to RGB bitmaps
+Uses a nolearn/lasagne convolutional neural net to evaluate whether a 'plausible image' is more like a member of CIFAR set or more like random noise. Currently set up as two class (CIFAR vs. noise) regression.
+Spits out ~.001% of generated 'images' as being candidates for being real images (>50% chance)
+The network I'm using is based on this blog post and works pretty well: http://blog.christianperone.com/2015/08/convolutional-neural-networks-and-feature-extraction-with-python/
+
+What I want to do is take these likely candidate images, and look nearby for better, more-image-y images.
+
+It is clear that: 1. taking the candidate image and changing components slightly (in the 3072-dimensional feature vector) will change the loss function. Right now a guess-and-check BS gradient function is sounding more doable than: 2. You could do a bunch of math, find the loss function's gradient at the image (with respect to the trained net), and implement gradient descent on this, but that sounds hard and I bet someone smarter than me has already done something better.
+
+I'm hoping there is an easy way to optimize a specific image (again, for the existing network). If the network were just a 2-d array, you could 'train the image' (with a very small learning rate to look for local minima) the same way you train a network - but I don't know how one would implement that even if the net were an uncomplicated object.
+
+Any help would be appreciated! I am guessing that this problem has been solved, but I don't even know what it's called so I'm really not getting anywhere Googling it.
+
+The code is a mess, but it's on github and I will update as I make progress. Link is here more for ethics than because it is presently useful: https://github.com/thesambeck/sift
+
+Thanks! Sam

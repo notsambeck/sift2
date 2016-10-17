@@ -18,7 +18,7 @@ from lasagne.updates import nesterov_momentum
 from dataset import nextTransformNarrow, quantization
 
 # all important increment
-increment = 199
+increment = 233
 
 omega = 500    # number of images to analyze in CIFAR
 imageSize = 32  # number of 'pixels' in generated images
@@ -50,20 +50,20 @@ savednet = NeuralNet(
     conv2d2_filter_size=(5, 5),
     conv2d2_nonlinearity=lasagne.nonlinearities.rectify,
     maxpool2_pool_size=(2, 2),
-    dropout1_p=0.2,
+    dropout1_p=0.5,
     dense_num_units=256,
     dense_nonlinearity=lasagne.nonlinearities.rectify,
-    dropout2_p=0.2,
+    dropout2_p=0.5,
     output_nonlinearity=None,
     output_num_units=1,
     update=nesterov_momentum,
     update_learning_rate=0.01,
     update_momentum=0.9,
-    max_epochs=10,
+    max_epochs=1000,
     verbose=1,
     regression=True)
 
-savednet.load_params_from('doubleconv_v0.nn')
+savednet.load_params_from('newnet.nn')
 
 
 class ImagePickler(pickle.Pickler):
