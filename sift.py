@@ -17,8 +17,8 @@ from lasagne import layers
 from lasagne.updates import nesterov_momentum
 from dataset import nextTransformNarrow, quantization
 
-# all important increment
-increment = 233
+# all important increment; this is locked in for training experiments at 201
+increment = 2701
 
 omega = 500    # number of images to analyze in CIFAR
 imageSize = 32  # number of 'pixels' in generated images
@@ -63,7 +63,7 @@ savednet = NeuralNet(
     verbose=1,
     regression=True)
 
-savednet.load_params_from('newnet.nn')
+savednet.load_params_from('dual_u1k_then_ufull.nn')
 
 
 class ImagePickler(pickle.Pickler):
@@ -95,14 +95,14 @@ class SiftWidget(Widget):
         toNet = np.zeros((1, 3, 32, 32), dtype='float32')
         toNet[0] = np.divide(np.subtract(image, 128.), 128.)
         p = savednet.predict(toNet)[0, 0]
-        if p >= .45:
+        if p >= .5:
             prob = str(p)[2:4]
             self.images_found += 1
             print('Image found, probabilty:', prob, '%.   #',
                   self.images_found, 'of', self.images_shown)
-            s = Image.fromarray(dataset.pillify(image))
-            s.save(''.join(['foundDualConv/', str(self.images_found), '_',
-                            prob, '.png']))
+            s = Image.fromarray(dataset.orderPIL(image))
+            s.save(''.join(['found161017/', str(self.images_found), '_',
+                           prob, '.png']))
             self.best = max(self.best, p)
             self.bestImage = np.divide(image, 255.)
 
@@ -120,7 +120,7 @@ class SiftWidget(Widget):
                 for i in range(imageSize):
                     pixel = self.bestImage[:, j, i]
                     Color(*pixel)
-                    Rectangle(pos=(i*scaleS + (imageSize+1)*scaleL,
+                    Rectangle(pos=(i*scaleS + (imageSize+4)*scaleL,
                                    (imageSize-1-j)*scaleS),
                               size=(scaleS, scaleS))
 
