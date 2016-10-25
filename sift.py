@@ -18,7 +18,7 @@ from lasagne.updates import nesterov_momentum
 from dataset import nextTransformNarrow, quantization
 
 # all important increment; this is locked in for training experiments at 201
-increment = 2701
+increment = 201
 
 omega = 500    # number of images to analyze in CIFAR
 imageSize = 32  # number of 'pixels' in generated images
@@ -34,11 +34,16 @@ savednet = NeuralNet(
     layers=[('input', layers.InputLayer),
             ('conv2d1', layers.Conv2DLayer),
             ('maxpool1', layers.MaxPool2DLayer),
-            ('conv2d2', layers.Conv2DLayer),
-            ('maxpool2', layers.MaxPool2DLayer),
             ('dropout1', layers.DropoutLayer),
-            ('dense', layers.DenseLayer),
+            ('conv2d2', layers.Conv2DLayer),
             ('dropout2', layers.DropoutLayer),
+            ('maxpool2', layers.MaxPool2DLayer),
+            ('conv2d3', layers.Conv2DLayer),
+            ('maxpool3', layers.MaxPool2DLayer),
+            ('dropout3', layers.DropoutLayer),
+            ('dense1', layers.DenseLayer),
+            ('dense2', layers.DenseLayer),
+            ('dense3', layers.DenseLayer),
             ('output', layers.DenseLayer)],
     input_shape=(None, 3, 32, 32),
     conv2d1_num_filters=32,
@@ -46,24 +51,33 @@ savednet = NeuralNet(
     conv2d1_nonlinearity=lasagne.nonlinearities.rectify,
     conv2d1_W=lasagne.init.GlorotUniform(),
     maxpool1_pool_size=(2, 2),
-    conv2d2_num_filters=32,
-    conv2d2_filter_size=(5, 5),
+    dropout1_p=0.5,
+    conv2d2_num_filters=64,
+    conv2d2_filter_size=(4, 4),
     conv2d2_nonlinearity=lasagne.nonlinearities.rectify,
     maxpool2_pool_size=(2, 2),
-    dropout1_p=0.5,
-    dense_num_units=256,
-    dense_nonlinearity=lasagne.nonlinearities.rectify,
     dropout2_p=0.5,
-    output_nonlinearity=None,
-    output_num_units=1,
+    conv2d3_num_filters=128,
+    conv2d3_filter_size=(2, 2),
+    conv2d3_nonlinearity=lasagne.nonlinearities.rectify,
+    maxpool3_pool_size=(2, 2),
+    dropout3_p=0.5,
+    dense1_num_units=1024,
+    dense1_nonlinearity=lasagne.nonlinearities.rectify,
+    dense2_num_units=1024,
+    dense2_nonlinearity=lasagne.nonlinearities.rectify,
+    dense3_num_units=512,
+    dense3_nonlinearity=lasagne.nonlinearities.rectify,
+    output_nonlinearity=lasagne.nonlinearities.softmax,
+    output_num_units=2,
     update=nesterov_momentum,
-    update_learning_rate=0.01,
-    update_momentum=0.9,
+    update_learning_rate=0.1,
+    update_momentum=.9,
     max_epochs=1000,
     verbose=1,
-    regression=True)
+    regression=False)
 
-savednet.load_params_from('dual_u1k_then_ufull.nn')
+savednet.load_params_from('net/deepnet_v4.nn')
 
 
 class ImagePickler(pickle.Pickler):
@@ -72,7 +86,8 @@ class ImagePickler(pickle.Pickler):
 
 
 class SiftWidget(Widget):
-    counter = np.zeros((3, 32, 32), dtype='float32')
+    counter = np.array(range(1, 3072000, 1000),
+                       dtype='float32').reshape((3, 32, 32), order='F')
     images_found = NumericProperty(0)
     images_shown = NumericProperty(0)
     best = 0.0
@@ -94,14 +109,14 @@ class SiftWidget(Widget):
         image = dataset.imY2R(dataset.idct(t))
         toNet = np.zeros((1, 3, 32, 32), dtype='float32')
         toNet[0] = np.divide(np.subtract(image, 128.), 128.)
-        p = savednet.predict(toNet)[0, 0]
+        p = savednet.predict(toNet)[0]
         if p >= .5:
             prob = str(p)[2:4]
             self.images_found += 1
             print('Image found, probabilty:', prob, '%.   #',
                   self.images_found, 'of', self.images_shown)
             s = Image.fromarray(dataset.orderPIL(image))
-            s.save(''.join(['found161017/', str(self.images_found), '_',
+            s.save(''.join(['found161024/', str(self.images_found), '_',
                            prob, '.png']))
             self.best = max(self.best, p)
             self.bestImage = np.divide(image, 255.)
