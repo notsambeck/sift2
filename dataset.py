@@ -17,7 +17,7 @@ omega = 10000
 def loadCifarTransforms():
     # cifar-10 filename: cifarTransforms.pkl
     # cifar-100 (all 50k):
-    pkl_file = open('cifarTransforms.pkl', 'rb')
+    pkl_file = open('data/cifarTransforms.pkl', 'rb')
     cifarTransformDistribution = pickle.load(pkl_file)
     cifarMaxTransform = pickle.load(pkl_file)
     cifarMinTransform = pickle.load(pkl_file)
@@ -35,7 +35,7 @@ cmax, cmean, cmin, cifartransforms = loadCifarTransforms()
 # cifardata, cifarlabels
 def importCifar():
     # cifar 10 data in batches 1-5, cifar-100 1 file
-    fo = open('cifar100.pkl', 'rb')
+    fo = open('data/cifar100.pkl', 'rb')
     u = pickle._Unpickler(fo)
     u.encoding = 'Latin1'
     cifar_data = u.load()
@@ -189,7 +189,7 @@ def studyImages(dataset, numberOfImages=omega):
         if round(pct) == pct:
             print(''.join([str(pct), '%...']))
     cifarMeanTransform = np.divide(total, numberOfImages)
-    out = open('cifarTransforms.pkl', 'wb')
+    out = open('data/cifarTransforms.pkl', 'wb')
     pickle.dump(cifarTransformDistribution, out)
     pickle.dump(cifarMaxTransform, out)
     pickle.dump(cifarMinTransform, out)
@@ -197,9 +197,37 @@ def studyImages(dataset, numberOfImages=omega):
     out.close()
 
 
-quantization = np.array(range(3172, 100, -1),
-                        dtype='float32').reshape((3, 32, 32), order='F')
-# placeholder (non-prime) list of quantization values will appear to work
+# quantization = np.array(range(3172, 100, -1),
+#                         dtype='float32').reshape((3, 32, 32), order='F')
+# old placeholder version of quantization
+
+
+def primes_sieve(limit):
+    a = [True] * limit                         # Initialize the primality list
+    a[0] = a[1] = False
+
+    for (i, isprime) in enumerate(a):
+        if isprime:
+            yield i
+            for n in range(i*i, limit, i):     # Mark factors non-prime
+                a[n] = False
+
+
+def buildPrimes(start, shape=(3, 32, 32), limit=50000):
+    out = np.ones(shape, dtype='float32')
+    primes = primes_sieve(limit)
+    # go to start value
+    p = next(primes)
+    while p < start:
+        p = next(primes)
+    # assign primes to each quantization coefficienct
+    for j in range(shape[1]):
+        for k in range(shape[2]):
+            for i in range(shape[0]):
+                out[i, 31-k, 31-j] = next(primes)
+    return out
+
+quantization = buildPrimes(500)
 
 
 # dataset alternates real/fake...should be OK?
@@ -212,15 +240,16 @@ def buildDataset(omega, channels=3, n=4, compression=1.0):
         pct = 100*i/omega
         if round(pct) == pct:
             print("".join([str(pct), '% ...']))
-        count = np.mod(np.add(count, 199.), quantization)
+        # try to teach model that first generated things are not images:
+        count = np.mod(np.add(count, 31.), quantization)
         count2 = np.mod(np.add(count2, 33334.), quantization)
-        pos = imY2R(idct(chop(cifartransforms[i], compression)))
+        pos = imY2R(idct(chop(cifartransforms[i], .8)))
         pos2 = imY2R(idct(chop(cifartransforms[i+omega], compression)))
-        b = imY2R(idct(chop(nextTransformNarrow(count), compression)))
+        b = imY2R(idct(chop(nextTransformNarrow(count), compression))) # super close
         c = imY2R(idct(chop(nextTransformNarrow(count2), compression)))
         label[n*i] = 1
         label[n*i+1] = 1
-        label[n*i+2] = 0
+        label[n*i+2] = 2
         label[n*i+3] = 0
         data[n*i] = pos
         data[n*i+1] = pos2
@@ -322,26 +351,27 @@ def getStdDev(imageArray):
                 out[chan, row, col] = imageArray[:, chan, row, col].std()
     return out
 
+
+# set up narrowScale, pre-mulitply
 cstd = getStdDev(cifartransforms)
-clow = np.subtract(cmean, cstd)
+narrowScale = 1.3
+clow = np.subtract(cmean, np.multiply(narrowScale, cstd))
+cmult = np.divide(np.multiply(2.0*narrowScale, cstd), quantization)
 
 
-# count neeeds to be float32 dtype
+# count neeeds to be float32 dtype!
+def nextTransformNarrow(count):
+    if count.dtype != 'float32':
+        raise ValueError(count.dtype)
+    transform = np.add(clow, np.multiply(count, cmult))
+    return transform
+
+
 def nextTransformWide(count, quantization=quantization):
     if count.dtype != 'float32':
         raise ValueError(count.dtype)
     transform = np.add(cmin, np.multiply(np.divide(np.subtract(cmax,
                                                                cmin),
-                                                   quantization),
-                                         count))
-    return transform
-
-
-def nextTransformNarrow(count, quantization=quantization):
-    if count.dtype != 'float32':
-        raise ValueError(count.dtype)
-    transform = np.add(clow, np.multiply(np.divide(np.multiply(2.0,
-                                                               cstd),
                                                    quantization),
                                          count))
     return transform
