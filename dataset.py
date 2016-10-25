@@ -17,7 +17,7 @@ omega = 10000
 def loadCifarTransforms():
     # cifar-10 filename: cifarTransforms.pkl
     # cifar-100 (all 50k):
-    pkl_file = open('cifarTransforms.pkl', 'rb')
+    pkl_file = open('data/cifarTransforms.pkl', 'rb')
     cifarTransformDistribution = pickle.load(pkl_file)
     cifarMaxTransform = pickle.load(pkl_file)
     cifarMinTransform = pickle.load(pkl_file)
@@ -28,14 +28,14 @@ def loadCifarTransforms():
 
 # loads pre-pickled dataset of 10k cifar images
 # cmax is matrix of maximum values of transform coefs, etc.
-cmax, cmean, cmin, cifartransforms = loadCifarTransforms()
+cmax, cmean, cmin, cifar = loadCifarTransforms()
 
 
 # import RGB CIFAR10 batch files from the web of 10k images as
 # cifardata, cifarlabels
 def importCifar():
     # cifar 10 data in batches 1-5, cifar-100 1 file
-    fo = open('cifar100.pkl', 'rb')
+    fo = open('data/cifar100.pkl', 'rb')
     u = pickle._Unpickler(fo)
     u.encoding = 'Latin1'
     cifar_data = u.load()
@@ -165,10 +165,10 @@ def chop(trans, compression=1.0):
     return trans
 
 
-# studyImages produces statistics about an image dataset (eg CIFAR)
+# formTransforms produces statistics about an image dataset (eg CIFAR)
 # and a 4-d array of all their transforms for analysis / plotting
 # note that this has been run on 10k images (see Load below)
-def studyImages(dataset, numberOfImages=omega):
+def formTransforms(dataset, numberOfImages=omega):
 
     # initialize result arrays:
     cifarMaxTransform = np.zeros((3, 32, 32), dtype='float32')
@@ -197,8 +197,15 @@ def studyImages(dataset, numberOfImages=omega):
     out.close()
 
 
-quantization = np.array(range(3172, 100, -1),
-                        dtype='float32').reshape((3, 32, 32), order='F')
+def transformDistance(dataset):
+    omega = dataset.shape[0]
+    distances = np.array(omega)
+    for i in range(omega):
+        distances[i] = np.sum(dataset[i]**2)
+
+
+# quantization = np.array(range(3172, 100, -1),
+#                        dtype='float32').reshape((3, 32, 32), order='F')
 # placeholder (non-prime) list of quantization values will appear to work
 
 
@@ -214,8 +221,8 @@ def buildDataset(omega, channels=3, n=4, compression=1.0):
             print("".join([str(pct), '% ...']))
         count = np.mod(np.add(count, 199.), quantization)
         count2 = np.mod(np.add(count2, 33334.), quantization)
-        pos = imY2R(idct(chop(cifartransforms[i], compression)))
-        pos2 = imY2R(idct(chop(cifartransforms[i+omega], compression)))
+        pos = imY2R(idct(chop(cifar[i], compression)))
+        pos2 = imY2R(idct(chop(cifar[i+omega], compression)))
         b = imY2R(idct(chop(nextTransformNarrow(count), compression)))
         c = imY2R(idct(chop(nextTransformNarrow(count2), compression)))
         label[n*i] = 1
@@ -229,7 +236,7 @@ def buildDataset(omega, channels=3, n=4, compression=1.0):
     # data broken up to 90% / 10% to use as desired
     data = np.divide(np.subtract(data, 128.), 128.)
     return (data[0:.9*n*omega], data[.9*n*omega:n*omega],
-    label[0:.9*n*omega], label[.9*n*omega:n*omega])
+            label[0:.9*n*omega], label[.9*n*omega:n*omega])
 
 
 # used 10/15 to save full cifar 100 datatset, should be good to go.
@@ -297,7 +304,8 @@ def orderPIL(image):
     return out
 
 
-# convert from -1 -> 1 data to PIL image
+# convert from neural net data [(3,32,32) RGB +/- 1] to PIL image
+# note that images are NOT normalized to +/- 1
 def toPIL(data):
     return Image.fromarray(orderPIL(np.add(np.multiply(data, 128.),
                                            128.)))
@@ -309,9 +317,24 @@ def plotHistogram(data, x_range=1, y_range=1, color_range=1):
         for j in range(y_range):
             for k in range(color_range):
                 l = (str(i) + " " + str(j) + " " + str(k))
-                plt.hist(data[:, i, j, k], 50, label=l)
+                plt.hist(data[:, k, i, j], 50, label=l)
     plt.legend(loc='upper right')
     plt.show()
+
+
+def diagonalUnfold(image, channels=1):
+    vector = np.zeros((channels, 1024))
+    for i in range(channels):
+        count = 0
+        for j in range(32):
+            for k in range(j+1):
+                vector[i, count] = image[i, j-k, k]
+                count += 1
+        for j in range(31):
+            for k in range(j+1):
+                vector[i, count] = image[i, 30-k, k]
+                count += 1
+    return vector
 
 
 def getStdDev(imageArray):
@@ -322,7 +345,7 @@ def getStdDev(imageArray):
                 out[chan, row, col] = imageArray[:, chan, row, col].std()
     return out
 
-cstd = getStdDev(cifartransforms)
+cstd = getStdDev(cifar)
 clow = np.subtract(cmean, cstd)
 
 
