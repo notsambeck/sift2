@@ -77,7 +77,7 @@ savednet = NeuralNet(
     verbose=1,
     regression=False)
 
-savednet.load_params_from('net/deepnet_v3.nn')
+savednet.load_params_from('net/deepnet_v4.nn')
 
 
 class ImagePickler(pickle.Pickler):
@@ -86,7 +86,8 @@ class ImagePickler(pickle.Pickler):
 
 
 class SiftWidget(Widget):
-    counter = np.zeros((3, 32, 32), dtype='float32')
+    counter = np.array(range(1, 3072000, 1000),
+                       dtype='float32').reshape((3, 32, 32), order='F')
     images_found = NumericProperty(0)
     images_shown = NumericProperty(0)
     best = 0.0

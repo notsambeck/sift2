@@ -71,17 +71,19 @@ net = NeuralNet(
     output_nonlinearity=lasagne.nonlinearities.softmax,
     output_num_units=2,
     update=nesterov_momentum,
-    update_learning_rate=0.05,
+    update_learning_rate=0.03,
     update_momentum=.9,
     max_epochs=1000,
-    verbose=1,
+    verbose=2,
     regression=False)
+
+#  x, xt, y, yt = dataset.loadDataset('data/cifar100_plus_narrow_50k.pkl')
 
 
 def Sift(omega=100000):
     images_found = 0
     counter = np.zeros((3, 32, 32), dtype='float32')
-    increment = 67701
+    increment = 27711
 
     for i in range(omega):
         if np.mod(i, 10000) == 0:
