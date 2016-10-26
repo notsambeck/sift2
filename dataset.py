@@ -245,7 +245,7 @@ def buildDatasetRGB(omega, channels=3, n=4, compression=1.0):
     count2 = np.zeros((channels, 32, 32), dtype='float32')
     for i in range(omega):
         pct = 100*i/omega
-        if round(pct) == pct:
+        if round(pct/10) == pct:
             print("".join([str(pct), '% ...']))
         # try to teach model that first generated things are not images:
         count = np.mod(np.add(count, 31.), quantization)
@@ -268,10 +268,9 @@ def buildDatasetRGB(omega, channels=3, n=4, compression=1.0):
             label[0:.9*n*omega], label[.9*n*omega:n*omega])
 
 
-def buildTransforms(omega):
+def buildTransformsIncremented(omega, inc=44777):
     out = np.zeros((omega, 3, 32, 32), dtype='float32')
     count = np.zeros((3, 32, 32), dtype='float32')
-    inc = 44777
     for i in range(omega):
         count = np.mod(np.add(count, inc), quantization)
         out[i] = nextTransformNarrow(count)

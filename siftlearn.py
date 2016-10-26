@@ -71,22 +71,26 @@ net = NeuralNet(
     output_nonlinearity=lasagne.nonlinearities.softmax,
     output_num_units=2,
     update=nesterov_momentum,
-    update_learning_rate=0.03,
+    update_learning_rate=0.007,
     update_momentum=.9,
     max_epochs=1000,
     verbose=2,
     regression=False)
 
+net.load_params_from('net/deepnet_v5.nn')
+
 #  x, xt, y, yt = dataset.loadDataset('data/cifar100_plus_narrow_50k.pkl')
 
+hard_images = np.zeros((10000, 3, 32, 32), 'uint8')
 
-def Sift(omega=100000, increment='5491'):
+
+def Sift(increment=1999, omega=10**7):
     images_found = 0
     counter = np.zeros((3, 32, 32), dtype='float32')
 
     for i in range(omega):
         if np.mod(i, 10000) == 0:
-            print(i, 'processed... counter mean=', counter.max())
+            print(i, 'processed... counter mean=', counter.mean())
         t = dataset.nextTransformNarrow(counter)
         image = dataset.imY2R(dataset.idct(t))
         toNet = np.zeros((1, 3, 32, 32), dtype='float32')
@@ -94,10 +98,12 @@ def Sift(omega=100000, increment='5491'):
         p = net.predict(toNet)[0]
         counter = np.mod(np.add(counter, increment), dataset.quantization)
         if p == 1:
-            images_found += 1
             print('Image found:', images_found, 'of', i)
             s = Image.fromarray(dataset.orderPIL(image))
-            s.save(''.join(['found161024/', str(images_found), '.png']))
+            s.save(''.join(['found_161026/', str(images_found), '.png']))
+            if images_found < 10000:
+                hard_images[images_found] = image
+            images_found += 1
 
     print('Net searched', omega, 'images and saved', images_found)
 
