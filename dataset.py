@@ -199,10 +199,10 @@ def formTransforms(dataset, numberOfImages=omega):
 
 def transformDistance(dataset):
     omega = dataset.shape[0]
-    distances = np.array(omega)
+    distances = np.zeros(omega)
     for i in range(omega):
-        distances[i] = np.sum(dataset[i]**2)
-
+        distances[i] = np.power(np.sum(np.power(dataset[i], 2)), .5)
+    return distances
 
 # quantization = np.array(range(3172, 100, -1),
 #                         dtype='float32').reshape((3, 32, 32), order='F')
@@ -237,8 +237,8 @@ def buildPrimes(start, shape=(3, 32, 32), limit=50000):
 quantization = buildPrimes(500)
 
 
-# dataset alternates real/fake...should be OK?
-def buildDataset(omega, channels=3, n=4, compression=1.0):
+# dataset alternates real/fake. NEEDS TO BE SHUFFLED!
+def buildDatasetRGB(omega, channels=3, n=4, compression=1.0):
     data = np.zeros((n*omega, channels, 32, 32), dtype='float32')
     label = np.zeros(n*omega, dtype='uint8')
     count = np.zeros((channels, 32, 32), dtype='float32')
@@ -256,7 +256,7 @@ def buildDataset(omega, channels=3, n=4, compression=1.0):
         c = imY2R(idct(chop(nextTransformNarrow(count2), compression)))
         label[n*i] = 1
         label[n*i+1] = 1
-        label[n*i+2] = 2
+        label[n*i+2] = 0
         label[n*i+3] = 0
         data[n*i] = pos
         data[n*i+1] = pos2
@@ -266,6 +266,16 @@ def buildDataset(omega, channels=3, n=4, compression=1.0):
     data = np.divide(np.subtract(data, 128.), 128.)
     return (data[0:.9*n*omega], data[.9*n*omega:n*omega],
             label[0:.9*n*omega], label[.9*n*omega:n*omega])
+
+
+def buildTransforms(omega):
+    out = np.zeros((omega, 3, 32, 32), dtype='float32')
+    count = np.zeros((3, 32, 32), dtype='float32')
+    inc = 44777
+    for i in range(omega):
+        count = np.mod(np.add(count, inc), quantization)
+        out[i] = nextTransformNarrow(count)
+    return out
 
 
 # used 10/15 to save full cifar 100 datatset, should be good to go.
@@ -377,7 +387,7 @@ def getStdDev(imageArray):
 
 # set up narrowScale, pre-mulitply
 cstd = getStdDev(cifar)
-narrowScale = 1.3
+narrowScale = 1.6
 clow = np.subtract(cmean, np.multiply(narrowScale, cstd))
 cmult = np.divide(np.multiply(2.0*narrowScale, cstd), quantization)
 

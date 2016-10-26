@@ -34,16 +34,16 @@ net = NeuralNet(
     layers=[('input', layers.InputLayer),
             ('conv2d1', layers.Conv2DLayer),
             ('maxpool1', layers.MaxPool2DLayer),
-            ('dropout1', layers.DropoutLayer),
             ('conv2d2', layers.Conv2DLayer),
-            ('dropout2', layers.DropoutLayer),
             ('maxpool2', layers.MaxPool2DLayer),
             ('conv2d3', layers.Conv2DLayer),
             ('maxpool3', layers.MaxPool2DLayer),
-            ('dropout3', layers.DropoutLayer),
             ('dense1', layers.DenseLayer),
+            ('dropout1', layers.DropoutLayer),
             ('dense2', layers.DenseLayer),
+            ('dropout2', layers.DropoutLayer),
             ('dense3', layers.DenseLayer),
+            ('dropout3', layers.DropoutLayer),
             ('output', layers.DenseLayer)],
     input_shape=(None, 3, 32, 32),
     conv2d1_num_filters=32,
@@ -51,23 +51,23 @@ net = NeuralNet(
     conv2d1_nonlinearity=lasagne.nonlinearities.rectify,
     conv2d1_W=lasagne.init.GlorotUniform(),
     maxpool1_pool_size=(2, 2),
-    dropout1_p=0.5,
     conv2d2_num_filters=64,
     conv2d2_filter_size=(4, 4),
     conv2d2_nonlinearity=lasagne.nonlinearities.rectify,
     maxpool2_pool_size=(2, 2),
-    dropout2_p=0.5,
     conv2d3_num_filters=128,
     conv2d3_filter_size=(2, 2),
     conv2d3_nonlinearity=lasagne.nonlinearities.rectify,
     maxpool3_pool_size=(2, 2),
-    dropout3_p=0.5,
     dense1_num_units=1024,
     dense1_nonlinearity=lasagne.nonlinearities.rectify,
+    dropout1_p=0.5,
     dense2_num_units=1024,
     dense2_nonlinearity=lasagne.nonlinearities.rectify,
+    dropout2_p=0.5,
     dense3_num_units=512,
     dense3_nonlinearity=lasagne.nonlinearities.rectify,
+    dropout3_p=0.5,
     output_nonlinearity=lasagne.nonlinearities.softmax,
     output_num_units=2,
     update=nesterov_momentum,
@@ -80,25 +80,24 @@ net = NeuralNet(
 #  x, xt, y, yt = dataset.loadDataset('data/cifar100_plus_narrow_50k.pkl')
 
 
-def Sift(omega=100000):
+def Sift(omega=100000, increment='5491'):
     images_found = 0
     counter = np.zeros((3, 32, 32), dtype='float32')
-    increment = 27711
 
     for i in range(omega):
         if np.mod(i, 10000) == 0:
-            print(i, 'processed...')
+            print(i, 'processed... counter mean=', counter.max())
         t = dataset.nextTransformNarrow(counter)
         image = dataset.imY2R(dataset.idct(t))
         toNet = np.zeros((1, 3, 32, 32), dtype='float32')
         toNet[0] = np.divide(np.subtract(image, 128.), 128.)
         p = net.predict(toNet)[0]
+        counter = np.mod(np.add(counter, increment), dataset.quantization)
         if p == 1:
             images_found += 1
             print('Image found:', images_found, 'of', i)
             s = Image.fromarray(dataset.orderPIL(image))
             s.save(''.join(['found161024/', str(images_found), '.png']))
-            counter = np.mod(np.add(counter, increment), dataset.quantization)
 
     print('Net searched', omega, 'images and saved', images_found)
 
