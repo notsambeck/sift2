@@ -32,56 +32,8 @@ scaleS = 20
 (cifarMaxTransform, cifarMeanTransform, cifarMinTransform,
  cifarStdDev) = dataset.loadCifarTransforms()
 
-savednet = NeuralNet(
-    layers=[('input', layers.InputLayer),
-            ('conv2d1', layers.Conv2DLayer),
-            ('maxpool1', layers.MaxPool2DLayer),
-            ('dropout1', layers.DropoutLayer),
-            ('conv2d2', layers.Conv2DLayer),
-            ('dropout2', layers.DropoutLayer),
-            ('maxpool2', layers.MaxPool2DLayer),
-            ('conv2d3', layers.Conv2DLayer),
-            ('maxpool3', layers.MaxPool2DLayer),
-            ('dropout3', layers.DropoutLayer),
-            ('dense1', layers.DenseLayer),
-            ('dense2', layers.DenseLayer),
-            ('dense3', layers.DenseLayer),
-            ('output', layers.DenseLayer)],
-    input_shape=(None, 3, 32, 32),
-    conv2d1_num_filters=32,
-    conv2d1_filter_size=(5, 5),
-    conv2d1_nonlinearity=lasagne.nonlinearities.rectify,
-    conv2d1_W=lasagne.init.GlorotUniform(),
-    maxpool1_pool_size=(2, 2),
-    dropout1_p=0.5,
-    conv2d2_num_filters=64,
-    conv2d2_filter_size=(4, 4),
-    conv2d2_nonlinearity=lasagne.nonlinearities.rectify,
-    maxpool2_pool_size=(2, 2),
-    dropout2_p=0.5,
-    conv2d3_num_filters=128,
-    conv2d3_filter_size=(2, 2),
-    conv2d3_nonlinearity=lasagne.nonlinearities.rectify,
-    maxpool3_pool_size=(2, 2),
-    dropout3_p=0.5,
-    dense1_num_units=1024,
-    dense1_nonlinearity=lasagne.nonlinearities.rectify,
-    dense2_num_units=1024,
-    dense2_nonlinearity=lasagne.nonlinearities.rectify,
-    dense3_num_units=512,
-    dense3_nonlinearity=lasagne.nonlinearities.rectify,
-    output_nonlinearity=lasagne.nonlinearities.softmax,
-    output_num_units=2,
-    update=nesterov_momentum,
-    update_learning_rate=0.1,
-    update_momentum=.9,
-    max_epochs=1000,
-    verbose=1,
-    regression=False)
-
-savednet.load_params_from('net/deepnet_v4.nn')
 # call net.save_params_to('filename.pkl') to create & save file
-net = NeuralNet(
+savednet = NeuralNet(
     layers=[('input', layers.InputLayer),
             ('conv2d1', layers.Conv2DLayer),
             ('maxpool1', layers.MaxPool2DLayer),
@@ -130,7 +82,7 @@ net = NeuralNet(
     verbose=2,
     regression=False)
 
-net.load_params_from('net.net')
+savednet.load_params_from('net.net')
 
 
 class ImagePickler(pickle.Pickler):
