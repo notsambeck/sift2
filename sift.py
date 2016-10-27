@@ -16,6 +16,8 @@ from PIL import Image
 from lasagne import layers
 from lasagne.updates import nesterov_momentum
 from dataset import nextTransformNarrow, quantization
+import os
+import datetime
 
 # all important increment; this is locked in for training experiments at 201
 increment = 201
@@ -28,7 +30,7 @@ scaleS = 20
 
 
 (cifarMaxTransform, cifarMeanTransform, cifarMinTransform,
- cifarTransformDistribution) = dataset.loadCifarTransforms()
+ cifarStdDev) = dataset.loadCifarTransforms()
 
 savednet = NeuralNet(
     layers=[('input', layers.InputLayer),
@@ -78,6 +80,57 @@ savednet = NeuralNet(
     regression=False)
 
 savednet.load_params_from('net/deepnet_v4.nn')
+# call net.save_params_to('filename.pkl') to create & save file
+net = NeuralNet(
+    layers=[('input', layers.InputLayer),
+            ('conv2d1', layers.Conv2DLayer),
+            ('maxpool1', layers.MaxPool2DLayer),
+            ('conv2d2', layers.Conv2DLayer),
+            ('maxpool2', layers.MaxPool2DLayer),
+            ('conv2d3', layers.Conv2DLayer),
+            ('conv2d4', layers.Conv2DLayer),
+            ('dense1', layers.DenseLayer),
+            ('dropout1', layers.DropoutLayer),
+            ('dense2', layers.DenseLayer),
+            ('dropout2', layers.DropoutLayer),
+            ('dense3', layers.DenseLayer),
+            ('dropout3', layers.DropoutLayer),
+            ('output', layers.DenseLayer)],
+    input_shape=(None, 3, 32, 32),
+    conv2d1_num_filters=32,
+    conv2d1_filter_size=(5, 5),
+    conv2d1_nonlinearity=lasagne.nonlinearities.rectify,
+    maxpool1_pool_size=(2, 2),
+    conv2d2_num_filters=64,
+    conv2d2_filter_size=(4, 4),
+    conv2d2_nonlinearity=lasagne.nonlinearities.rectify,
+    maxpool2_pool_size=(2, 2),
+    conv2d3_num_filters=128,
+    conv2d3_filter_size=(2, 2),
+    conv2d3_nonlinearity=lasagne.nonlinearities.rectify,
+    conv2d4_num_filters=128,
+    conv2d4_filter_size=(2, 2),
+    conv2d4_nonlinearity=lasagne.nonlinearities.rectify,
+    conv2d4_W=lasagne.init.GlorotUniform(),
+    dense1_num_units=1024,
+    dense1_nonlinearity=lasagne.nonlinearities.rectify,
+    dropout1_p=0.5,
+    dense2_num_units=1024,
+    dense2_nonlinearity=lasagne.nonlinearities.rectify,
+    dropout2_p=0.5,
+    dense3_num_units=512,
+    dense3_nonlinearity=lasagne.nonlinearities.rectify,
+    dropout3_p=0.5,
+    output_nonlinearity=lasagne.nonlinearities.softmax,
+    output_num_units=2,
+    update=nesterov_momentum,
+    update_learning_rate=0.007,
+    update_momentum=.9,
+    max_epochs=1000,
+    verbose=2,
+    regression=False)
+
+net.load_params_from('net.net')
 
 
 class ImagePickler(pickle.Pickler):
@@ -92,6 +145,14 @@ class SiftWidget(Widget):
     images_shown = NumericProperty(0)
     best = 0.0
     bestImage = np.zeros((3, imageSize, imageSize))
+
+    if not os.path.exists('found_images'):
+        os.makedirs('found_images')
+    directory = "".join(['found_images/', str(datetime.date.today()),
+                         '_increment-', str(increment)])
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    print('saving to:', directory)
 
     def update(self, dt):
         self.canvas.clear()
@@ -110,14 +171,14 @@ class SiftWidget(Widget):
         toNet = np.zeros((1, 3, 32, 32), dtype='float32')
         toNet[0] = np.divide(np.subtract(image, 128.), 128.)
         p = savednet.predict(toNet)[0]
-        if p >= .5:
-            prob = str(p)[2:4]
+        if p == 1:
+            # prob = str(p)[2:4]
             self.images_found += 1
-            print('Image found, probabilty:', prob, '%.   #',
-                  self.images_found, 'of', self.images_shown)
+            # print('Image found, probabilty:', prob, '%.   #',
+            #       self.images_found, 'of', self.images_shown)
             s = Image.fromarray(dataset.orderPIL(image))
-            s.save(''.join(['found161024/', str(self.images_found), '_',
-                           prob, '.png']))
+            s.save(''.join([self.directory, '/', str(self.images_found),
+                            '.png']))
             self.best = max(self.best, p)
             self.bestImage = np.divide(image, 255.)
 
