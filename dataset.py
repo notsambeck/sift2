@@ -7,6 +7,7 @@ from math import cos, pi
 import matplotlib.pyplot as plt
 from PIL import Image
 
+
 omega = 10000
 
 
@@ -14,7 +15,7 @@ omega = 10000
 #
 # Max, Mean, Min, Distribution = loadCifarTransforms() This should be
 # the only function needed in main app once the pickle is constructed.
-def loadCifarTransforms():
+def loadCifar100Transforms():
     # cifar-10 filename: cifarTransforms.pkl
     # cifar-100 (all 50k):
     pkl_file = open('data/cifarTransforms.pkl', 'rb')
@@ -28,22 +29,40 @@ def loadCifarTransforms():
 
 # loads pre-pickled dataset of 10k cifar images
 # cmax is matrix of maximum values of transform coefs, etc.
-cmax, cmean, cmin, cifar = loadCifarTransforms()
+cmax, cmean, cmin, cifar = loadCifar100Transforms()
 
 
 # import RGB CIFAR10 batch files from the web of 10k images as
 # cifardata, cifarlabels
-def importCifar():
-    # cifar 10 data in batches 1-5, cifar-100 1 file
+def importCifar100():
+    # cifar-100 1 file
     fo = open('data/cifar100.pkl', 'rb')
     u = pickle._Unpickler(fo)
     u.encoding = 'Latin1'
     cifar_data = u.load()
     fo.close()
-    cifardata = cifar_data['data']
-    print('Imported dataset. Samples:', len(cifardata), ', shape:',
-          cifardata.shape)
-    return cifardata
+    cifar100 = cifar_data['data']
+    print('Imported dataset. Samples:', len(cifar100), ', shape:',
+          cifar100.shape)
+    return cifar100
+
+
+# import RGB CIFAR10 batch files from the web of 10k images as
+# cifardata, cifarlabels
+def importCifar10():
+    # cifar 10 data in batches 1-5
+    cifar10 = np.zeros((50000, 3072), dtype='uint8')
+    for i in range(1, 6):
+        name = ''.join(['data/data_batch_', str(i)])
+        f = open(name, 'rb')
+        u = pickle._Unpickler(f)
+        u.encoding = 'Latin1'
+        cifar_data = u.load()
+        f.close()
+        cifar10[(i-1)*10000:i*10000] = cifar_data['data']
+    print('Imported dataset. Samples:', len(cifar10), ', shape:',
+          cifar10.shape)
+    return cifar10
 
 
 # coverts an image from RGB to YCC colorspace
@@ -238,7 +257,7 @@ quantization = buildPrimes(500)
 
 
 # dataset alternates real/fake. NEEDS TO BE SHUFFLED!
-def buildDatasetRGB(omega, channels=3, n=4, compression=1.0):
+def buildDatasetFromTransforms(omega, channels=3, n=4, compression=1.0):
     data = np.zeros((n*omega, channels, 32, 32), dtype='float32')
     label = np.zeros(n*omega, dtype='uint8')
     count = np.zeros((channels, 32, 32), dtype='float32')
@@ -268,6 +287,43 @@ def buildDatasetRGB(omega, channels=3, n=4, compression=1.0):
             label[0:.9*n*omega], label[.9*n*omega:n*omega])
 
 
+def buildDataset(omega):
+    n = 3   # number of classes: cifar, small inc, big inc
+    data = np.zeros((n*omega, 3, 32, 32), dtype='float32')
+    label = np.zeros(n*omega, dtype='uint8')
+    cifar = load_all_cifar()
+    hard = load_hard()
+    print('resources loaded')
+
+    # build dataset block by block as 0-255 RGB
+    for i in range(omega):
+        data[i] = getImage255(i, cifar)
+        label[i] = 1
+
+    data[omega:2*omega] = buildRGBIncremented(omega, inc=199)
+    print('chunk1 built...')
+    data[2*omega:3*omega] = buildRGBIncremented(omega, inc=3332)
+    print('chunk2 built...')
+    data[n*omega-1978:] = hard[:1979]
+
+    # scale to +/- 1
+    data = np.subtract(data, 127.5)
+    print('centered')
+    data = np.divide(data, 127.5)
+    print('normalized')
+    
+    # shuffle
+    state = np.random.get_state()
+    np.random.shuffle(data)
+    np.random.set_state(state)
+    np.random.shuffle(label)
+
+    # data broken up to x% / 100-x% to use as desired:
+    split = round(.95*n*omega)
+    return (data[0:split], data[split:n*omega],
+            label[0:split], label[split:n*omega])
+
+
 def buildTransformsIncremented(omega, inc=44777):
     out = np.zeros((omega, 3, 32, 32), dtype='float32')
     count = np.zeros((3, 32, 32), dtype='float32')
@@ -275,6 +331,29 @@ def buildTransformsIncremented(omega, inc=44777):
         count = np.mod(np.add(count, inc), quantization)
         out[i] = nextTransformNarrow(count)
     return out
+
+
+def buildRGBIncremented(omega, inc=44777):
+    out = np.zeros((omega, 3, 32, 32), dtype='uint8')
+    count = np.zeros((3, 32, 32), dtype='float32')
+    for i in range(omega):
+        count = np.mod(np.add(count, inc), quantization)
+        out[i] = imY2R(idct(nextTransformNarrow(count)))
+    return out
+
+
+def load_hard():
+    f = open('data/hard_images_10k.pkl', 'rb')
+    c = pickle.load(f)
+    f.close()
+    return c
+
+
+def load_all_cifar():
+    f = open('data/all_100k_cifar.pkl', 'rb')
+    c = pickle.load(f)
+    f.close()
+    return c
 
 
 # used 10/15 to save full cifar 100 datatset, should be good to go.

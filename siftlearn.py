@@ -37,7 +37,7 @@ net = NeuralNet(
             ('conv2d2', layers.Conv2DLayer),
             ('maxpool2', layers.MaxPool2DLayer),
             ('conv2d3', layers.Conv2DLayer),
-            ('maxpool3', layers.MaxPool2DLayer),
+            ('conv2d4', layers.Conv2DLayer),
             ('dense1', layers.DenseLayer),
             ('dropout1', layers.DropoutLayer),
             ('dense2', layers.DenseLayer),
@@ -49,7 +49,6 @@ net = NeuralNet(
     conv2d1_num_filters=32,
     conv2d1_filter_size=(5, 5),
     conv2d1_nonlinearity=lasagne.nonlinearities.rectify,
-    conv2d1_W=lasagne.init.GlorotUniform(),
     maxpool1_pool_size=(2, 2),
     conv2d2_num_filters=64,
     conv2d2_filter_size=(4, 4),
@@ -58,7 +57,10 @@ net = NeuralNet(
     conv2d3_num_filters=128,
     conv2d3_filter_size=(2, 2),
     conv2d3_nonlinearity=lasagne.nonlinearities.rectify,
-    maxpool3_pool_size=(2, 2),
+    conv2d4_num_filters=128,
+    conv2d4_filter_size=(2, 2),
+    conv2d4_nonlinearity=lasagne.nonlinearities.rectify,
+    conv2d4_W=lasagne.init.GlorotUniform(),
     dense1_num_units=1024,
     dense1_nonlinearity=lasagne.nonlinearities.rectify,
     dropout1_p=0.5,
@@ -77,11 +79,10 @@ net = NeuralNet(
     verbose=2,
     regression=False)
 
-net.load_params_from('net/deepnet_v5.nn')
+net.load_params_from('net/deepnet_base_161026.nn')
 
-#  x, xt, y, yt = dataset.loadDataset('data/cifar100_plus_narrow_50k.pkl')
-
-hard_images = np.zeros((10000, 3, 32, 32), 'uint8')
+# x, xt, y, yt = dataset.loadDataset('data/full_cifar_plus_161026.pkl')
+# hard_images = np.zeros((10000, 3, 32, 32), 'uint8')
 
 
 def Sift(increment=1999, omega=10**7):
