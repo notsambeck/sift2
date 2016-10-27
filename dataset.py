@@ -1,5 +1,5 @@
 # Datasetfile contains DCT and image conversion tools and utilities to
-# load CIFAR dataset to/from a Pickle file.
+# load CIFAR dataset, analyze it, and create images
 
 import numpy as np
 import pickle
@@ -8,32 +8,77 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 
-omega = 10000
+omega = 1000
 
 
-# LOAD CIFAR TRANSFORMS from pickle made in studyImages:
-#
+# makeTransforms produces statistics about an image dataset (eg CIFAR)
+# and a 4-d array of all their transforms for analysis / plotting
+# typically you can just load this pickle
+def makeTransforms(dataset, numberOfImages=omega):
+    # initialize result arrays:
+    cifarMaxTransform = np.zeros((3, 32, 32), dtype='float32')
+    cifarMinTransform = np.zeros((3, 32, 32), dtype='float32')
+    cifarMinTransform = dct(getImageYCC(0, dataset))
+    total = np.zeros((3, 32, 32), dtype='float32')
+
+    # format: RGB transforms stacked numberOfImages deep
+    cifarTransforms = np.zeros((numberOfImages, 3, 32, 32),
+                               dtype='float32')
+
+    # loop through CIFAR images
+    for i in range(numberOfImages):
+        transform = dct(getImageYCC(i, dataset))
+        cifarMaxTransform = np.maximum(cifarMaxTransform, transform)
+        cifarMinTransform = np.minimum(cifarMinTransform, transform)
+        total = np.add(total, transform)
+        cifarTransforms[i] = transform
+        pct = i/numberOfImages*100
+        if round(pct) == pct:
+            print(''.join([str(pct), '%...']))
+    cifarMeanTransform = np.divide(total, numberOfImages)
+    out = open('init_data', 'wb')
+    cstd = getStdDev(cifarTransforms)
+
+    # pickle.dump(cifarTransforms, out)    # if you want to save all data
+    pickle.dump(cifarMaxTransform, out)
+    pickle.dump(cifarMinTransform, out)
+    pickle.dump(cifarMeanTransform, out)
+    pickle.dump(cstd, out)
+    out.close()
+
+
+# LOAD CIFAR TRANSFORMS from pickle made in makeTransforms:
 # Max, Mean, Min, Distribution = loadCifarTransforms() This should be
 # the only function needed in main app once the pickle is constructed.
-def loadCifar100Transforms():
-    # cifar-10 filename: cifarTransforms.pkl
-    # cifar-100 (all 50k):
-    pkl_file = open('data/cifarTransforms.pkl', 'rb')
-    cifarTransformDistribution = pickle.load(pkl_file)
+def loadCifarTransforms():
+    # cifar-100 filename including transforms: cifarTransforms.pkl
+    pkl_file = open('init_data', 'rb')
+    # cifarTransforms = pickle.load(pkl_file)   # again, if you saved data
     cifarMaxTransform = pickle.load(pkl_file)
     cifarMinTransform = pickle.load(pkl_file)
     cifarMeanTransform = pickle.load(pkl_file)
+    cifarStdDeviation = pickle.load(pkl_file)
     pkl_file.close()
     return (cifarMaxTransform, cifarMeanTransform,
-            cifarMinTransform, cifarTransformDistribution)
+            cifarMinTransform, cifarStdDeviation)
 
-# loads pre-pickled dataset of 10k cifar images
-# cmax is matrix of maximum values of transform coefs, etc.
-cmax, cmean, cmin, cifar = loadCifar100Transforms()
+# loads pre-pickled dataset of images. cmax is matrix of maximum
+# values of transform coefs, etc.  used in creating images
+cmax, cmean, cmin, cstd = loadCifarTransforms()
 
 
-# import RGB CIFAR10 batch files from the web of 10k images as
-# cifardata, cifarlabels
+# find std. deviation of each transform coefficient
+def getStdDev(transformArray):
+    out = np.zeros((3, 32, 32), dtype='float32')
+    for row in range(32):
+        for col in range(32):
+            for chan in range(3):
+                out[chan, row, col] = transformArray[:, chan, row, col].std()
+    return out
+
+
+# import RGB CIFAR100 batch file of 50k images
+# google cifar for this and cifar10 dataset
 def importCifar100():
     # cifar-100 1 file
     fo = open('data/cifar100.pkl', 'rb')
@@ -47,8 +92,7 @@ def importCifar100():
     return cifar100
 
 
-# import RGB CIFAR10 batch files from the web of 10k images as
-# cifardata, cifarlabels
+# import RGB CIFAR10 batch files of 10k images
 def importCifar10():
     # cifar 10 data in batches 1-5
     cifar10 = np.zeros((50000, 3072), dtype='uint8')
@@ -80,15 +124,6 @@ def imY2R(image):
     for row in range(32):
         for col in range(32):
             out[:, row, col] = y2rVector(image[:, row, col])
-    return out
-
-
-# coverts an image from YCC to RGB colorspace 0-255
-def imY2Rbig(image, resolution=64):
-    out = np.zeros((3, resolution, resolution), dtype='float32')
-    for row in range(resolution):
-        for col in range(resolution):
-            out[:, row, col] = y2r(image[:, row, col])
     return out
 
 
@@ -140,9 +175,7 @@ def dct_matrix(n):
             d[row][col] = (2./n)**.5*cos(row*pi*(2.*col+1.)/2./n)
     return(d)
 
-
 dctMatrix = dct_matrix(32)
-dctMatrix128 = dct_matrix(64)
 
 
 # DCTII creates YCC transform values from YCC pixel values
@@ -155,7 +188,7 @@ def dct(img):
     return transform
 
 
-# iDCT(II) creates YCC pixel values from YCC transform coefficients
+# iDCT(DCT III) creates YCC pixel values from YCC transform coefficients
 def idct(trans):
     img = np.ndarray(trans.shape, dtype='float32')
     for i in range(trans.shape[0]):
@@ -165,18 +198,7 @@ def idct(trans):
     return img
 
 
-# iDCT64(II) creates YCC pixel values from YCC transform coefficients
-def idct128(trans):
-    img = np.ndarray((3, 64, 64), dtype='float32')
-    pad = np.zeros((3, 64, 64), dtype='float32')
-    pad[:, :32, :32] = trans
-    for i in range(1):
-        # print trans.shape, dctMatrix.shape, i
-        img[i] = np.dot(np.dot(np.transpose(dctMatrix128), pad[i]),
-                        dctMatrix128)
-    return img
-
-
+# chop is an ultra-shitty compression scheme that works well
 def chop(trans, compression=1.0):
     for i in range(round(trans.shape[-1]*compression), trans.shape[-1]):
         trans[:, i, :] = 0
@@ -184,38 +206,7 @@ def chop(trans, compression=1.0):
     return trans
 
 
-# formTransforms produces statistics about an image dataset (eg CIFAR)
-# and a 4-d array of all their transforms for analysis / plotting
-# note that this has been run on 10k images (see Load below)
-def formTransforms(dataset, numberOfImages=omega):
-
-    # initialize result arrays:
-    cifarMaxTransform = np.zeros((3, 32, 32), dtype='float32')
-    cifarMinTransform = dct(getImageYCC(0, dataset))
-    total = np.zeros((3, 32, 32), dtype='float32')
-    # distribution is an arary: RGB transforms stacked numberOfImages deep
-    cifarTransformDistribution = np.zeros((numberOfImages, 3, 32, 32),
-                                          dtype='float32')
-    
-    # loop through CIFAR images
-    for i in range(numberOfImages):
-        transform = dct(getImageYCC(i, dataset))
-        cifarMaxTransform = np.maximum(cifarMaxTransform, transform)
-        cifarMinTransform = np.minimum(cifarMinTransform, transform)
-        total = np.add(total, transform)
-        cifarTransformDistribution[i] = transform
-        pct = i/numberOfImages*100
-        if round(pct) == pct:
-            print(''.join([str(pct), '%...']))
-    cifarMeanTransform = np.divide(total, numberOfImages)
-    out = open('data/cifarTransforms.pkl', 'wb')
-    pickle.dump(cifarTransformDistribution, out)
-    pickle.dump(cifarMaxTransform, out)
-    pickle.dump(cifarMinTransform, out)
-    pickle.dump(cifarMeanTransform, out)
-    out.close()
-
-
+# find Cartesian distance from origin for a transform
 def transformDistance(dataset):
     omega = dataset.shape[0]
     distances = np.zeros(omega)
@@ -225,11 +216,11 @@ def transformDistance(dataset):
 
 # quantization = np.array(range(3172, 100, -1),
 #                         dtype='float32').reshape((3, 32, 32), order='F')
-# old placeholder version of quantization now replaced
+# old placeholder version of quantization now replaced with prime
 
 
 def primes_sieve(limit):
-    a = [True] * limit                         # Initialize the primality list
+    a = [True] * limit
     a[0] = a[1] = False
 
     for (i, isprime) in enumerate(a):
@@ -253,46 +244,22 @@ def buildPrimes(start, shape=(3, 32, 32), limit=50000):
                 out[i, 31-k, 31-j] = next(primes)
     return out
 
+
+# quantization is now a matrix (size of an image) of all unique prime
+# numbers not really a quantization matrix but does define number of
+# steps allowed for transforms. It is ordered like a real quantization
+# matrix - less steps for less significant coeffs. Start point is
+# arbitrary.
 quantization = buildPrimes(500)
 
 
-# dataset alternates real/fake. NEEDS TO BE SHUFFLED!
-def buildDatasetFromTransforms(omega, channels=3, n=4, compression=1.0):
-    data = np.zeros((n*omega, channels, 32, 32), dtype='float32')
-    label = np.zeros(n*omega, dtype='uint8')
-    count = np.zeros((channels, 32, 32), dtype='float32')
-    count2 = np.zeros((channels, 32, 32), dtype='float32')
-    for i in range(omega):
-        pct = 100*i/omega
-        if round(pct/10) == pct:
-            print("".join([str(pct), '% ...']))
-        # try to teach model that first generated things are not images:
-        count = np.mod(np.add(count, 31.), quantization)
-        count2 = np.mod(np.add(count2, 33334.), quantization)
-        pos = imY2R(idct(chop(cifar[i], compression)))
-        pos2 = imY2R(idct(chop(cifar[i+omega], compression)))
-        b = imY2R(idct(chop(nextTransformNarrow(count), compression)))
-        c = imY2R(idct(chop(nextTransformNarrow(count2), compression)))
-        label[n*i] = 1
-        label[n*i+1] = 1
-        label[n*i+2] = 0
-        label[n*i+3] = 0
-        data[n*i] = pos
-        data[n*i+1] = pos2
-        data[n*i+2] = b
-        data[n*i+3] = c
-    # data broken up to 90% / 10% to use as desired
-    data = np.divide(np.subtract(data, 128.), 128.)
-    return (data[0:.9*n*omega], data[.9*n*omega:n*omega],
-            label[0:.9*n*omega], label[.9*n*omega:n*omega])
-
-
+# buildDataset makes a training set for network.
 def buildDataset(omega):
-    n = 3   # number of classes: cifar, small inc, big inc
+    n = 3   # number of classes: cifar, small increment, big inc
     data = np.zeros((n*omega, 3, 32, 32), dtype='float32')
     label = np.zeros(n*omega, dtype='uint8')
     cifar = load_all_cifar()
-    hard = load_hard()
+    # hard = load_hard()    # if you have hard negative examples
     print('resources loaded')
 
     # build dataset block by block as 0-255 RGB
@@ -300,18 +267,19 @@ def buildDataset(omega):
         data[i] = getImage255(i, cifar)
         label[i] = 1
 
+    print('building generated images slowly...')
     data[omega:2*omega] = buildRGBIncremented(omega, inc=199)
     print('chunk1 built...')
     data[2*omega:3*omega] = buildRGBIncremented(omega, inc=3332)
     print('chunk2 built...')
-    data[n*omega-1978:] = hard[:1979]
+    # data[n*omega-1978:] = hard[:1979]
 
     # scale to +/- 1
-    data = np.subtract(data, 127.5)
+    data = np.subtract(data, 128.)
     print('centered')
-    data = np.divide(data, 127.5)
+    data = np.divide(data, 128.)
     print('normalized')
-    
+
     # shuffle
     state = np.random.get_state()
     np.random.shuffle(data)
@@ -333,6 +301,7 @@ def buildTransformsIncremented(omega, inc=44777):
     return out
 
 
+# this was a float32 out, but I beleive that caused the neon blobs?
 def buildRGBIncremented(omega, inc=44777):
     out = np.zeros((omega, 3, 32, 32), dtype='uint8')
     count = np.zeros((3, 32, 32), dtype='float32')
@@ -413,7 +382,7 @@ def getImageYCC(n, dataset):
     return(imR2Y(getImage255(n, dataset)))
 
 
-# reorder an image to 32,32,3 for PIL Image
+# reorder an 0-255 image to 32,32,3 for PIL Image
 def orderPIL(image):
     out = np.zeros((32, 32, 3), dtype='uint8')
     for i in range(3):
@@ -422,12 +391,15 @@ def orderPIL(image):
 
 
 # convert from neural net data [(3,32,32) RGB +/- 1] to PIL image
-# note that images are NOT normalized to +/- 1
-def toPIL(data):
-    return Image.fromarray(orderPIL(np.add(np.multiply(data, 128.),
-                                           128.)))
+# call only on NN data, not images
+def toPIL(data, scale=128):
+    return Image.fromarray(orderPIL(np.add(np.multiply(data, scale),
+                                           scale)))
 
 
+# DATA ANALYSIS TOOLS - NOT NECESSARILY USEFUL #
+
+# look at distribution of transforms
 def plotHistogram(data, x_range=1, y_range=1, color_range=1):
     # show histograms of transform data (columns in 4th dimension)
     for i in range(x_range):
@@ -439,6 +411,7 @@ def plotHistogram(data, x_range=1, y_range=1, color_range=1):
     plt.show()
 
 
+# take a matrix and list it in order of significance of coefs.
 def diagonalUnfold(image, channels=1):
     vector = np.zeros((channels, 1024))
     for i in range(channels):
@@ -454,23 +427,15 @@ def diagonalUnfold(image, channels=1):
     return vector
 
 
-def getStdDev(imageArray):
-    out = np.zeros((3, 32, 32), dtype='float32')
-    for row in range(32):
-        for col in range(32):
-            for chan in range(3):
-                out[chan, row, col] = imageArray[:, chan, row, col].std()
-    return out
-
-
-# set up narrowScale, pre-mulitply
-cstd = getStdDev(cifar)
+# THE ACTUAL IMAGE GENERATOR FUNCTION! #
 narrowScale = 1.6
 clow = np.subtract(cmean, np.multiply(narrowScale, cstd))
 cmult = np.divide(np.multiply(2.0*narrowScale, cstd), quantization)
 
 
-# count neeeds to be float32 dtype!
+# count neeeds to be float32 dtype or things get weird!
+# CREATE NEXT IMAGE USING A COUNTER MATRIX
+# narrowScale 1.6  matches distribution of real images OK...
 def nextTransformNarrow(count):
     if count.dtype != 'float32':
         raise ValueError(count.dtype)
@@ -478,6 +443,8 @@ def nextTransformNarrow(count):
     return transform
 
 
+# create next image in full range - min to max.
+# leads to a lot of blacks and whites, narrow is better
 def nextTransformWide(count, quantization=quantization):
     if count.dtype != 'float32':
         raise ValueError(count.dtype)
