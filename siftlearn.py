@@ -1,10 +1,10 @@
-# lasagne nolearn module for SiFT
-# Sift as master can call these functions
+# lasagne/nolearn module for SiFT
+# Sift can call these functions
 # from here OK to use helper functions from dataset.py NOT OK to use
 # functions from sift.py see blog.christianperone.com - convolutional
-# neural networks blog post 2015
+# neural networks blog post (2015)
 
-# GPU speedup:
+# GPU info from desktop:
 # Hardware Class: graphics card
 # Model: "nVidia GF119 [GeForce GT 620 OEM]"
 # Vendor: pci 0x10de "nVidia Corporation"
@@ -12,21 +12,26 @@
 # SubVendor: pci 0x10de "nVidia Corporation"
 
 
-import matplotlib.pyplot as plt
-import pickle
 import numpy as np
-import theano
 import lasagne
 from lasagne import layers
 from lasagne.updates import nesterov_momentum
 from nolearn.lasagne import NeuralNet
+from PIL import Image
+import os
+import datetime
+
+# optional functions for network visualization, debug
+'''
+import matplotlib.pyplot as plt
+import theano
 from nolearn.lasagne import visualize
 from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
-from PIL import Image
+'''
 
 # dataset is a sift module that imports CIFAR and provides
-# image transform functions and access to saved datasets
+# image transform functions and access to saved datasets/etc.
 import dataset
 
 # call net.save_params_to('filename.pkl') to create & save file
@@ -79,15 +84,35 @@ net = NeuralNet(
     verbose=2,
     regression=False)
 
-net.load_params_from('net/deepnet_base_161026.nn')
+net.load_params_from('net.net')
 
+
+# do you want to train the network more? build a dataset & load here:
+# import pickle
 # x, xt, y, yt = dataset.loadDataset('data/full_cifar_plus_161026.pkl')
-# hard_images = np.zeros((10000, 3, 32, 32), 'uint8')
 
 
-def Sift(increment=1999, omega=10**7):
+# how many images to store as array in RAM
+howManyToSave = 100000
+# images are saved to .png by default, but also here
+found_images = np.zeros((howManyToSave, 3, 32, 32), 'uint8')
+
+
+# non-visualized Sift program.  Runs omega images, counting by
+# increment.  net checks them, good ones are saved to a folder with
+# today's date & increment
+def Sift(increment=1999, omega=10**6):
     images_found = 0
     counter = np.zeros((3, 32, 32), dtype='float32')
+
+    # make dir found_images
+    if not os.path.exists('found_images'):
+        os.makedirs('found_images')
+    directory = "".join(['found_images/', str(datetime.date.today()),
+                         '_increment-', str(increment)])
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    print('saving to', directory)
 
     for i in range(omega):
         if np.mod(i, 10000) == 0:
@@ -101,15 +126,26 @@ def Sift(increment=1999, omega=10**7):
         if p == 1:
             print('Image found:', images_found, 'of', i)
             s = Image.fromarray(dataset.orderPIL(image))
-            s.save(''.join(['found_161026/', str(images_found), '.png']))
-            if images_found < 10000:
-                hard_images[images_found] = image
+            s.save(''.join([directory, '/', str(images_found), '.png']))
+            if images_found < howManyToSave:
+                found_images[images_found] = image
             images_found += 1
 
-    print('Net searched', omega, 'images and saved', images_found)
+    print('Sifted through', omega, 'images and saved', images_found)
 
 
+# check against validation set, optionally save miscategorized images
 def check_accuracy(x, y, save=False):
+
+    # if save=True, make directory for image files
+    if save:
+        if not os.path.exists('incorrect'):
+            os.makedirs('incorrect')
+        directory = "".join(['incorrect/', str(datetime.date.today())])
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        print('saving miscategorized images to:', directory)
+
     t = ['true', 0]
     fp = ['false_pos', 0]
     fn = ['false_neg', 0]
@@ -121,35 +157,12 @@ def check_accuracy(x, y, save=False):
         else:
             if save:
                 s = dataset.toPIL(x[i])
-                s.save(''.join(['wrong/', str(i), '_T', str(y[i]), '.png']))
+                s.save(''.join([directory, '/', str(i),
+                                '_T-', str(y[i]), '.png']))
             if y[i] == 0:
                 fp[1] += 1
             else:
                 fn[1] += 1
     print('Of', omega, 'examples:')
     for thing in [t, fp, fn]:
-        print(thing[0], ':', thing[1], '=', str(thing[1]/omega*100), '%')
-
-
-def check_accuracy_multiple(x, y, save=False):
-    t = ['true', 0]
-    f0 = ['false_0', 0]
-    f1 = ['false_1', 0]
-    f2 = ['false_2', 0]
-    omega = y.shape[-1]
-    p = net.predict(x)
-    for i in range(omega):
-        if p[i] == y[i]:
-            t[1] += 1
-        else:
-            if save:
-                s = dataset.toPIL(x[i])
-                s.save(''.join(['wrong/', str(i), '_T', str(y[i]), '.png']))
-            if p[i] == 0:
-                f0[1] += 1
-            elif p[i] == 1:
-                f1[1] += 1
-            else: f2[1] += 1
-    print('Of', omega, 'examples:')
-    for thing in [t, f0, f1, f2]:
         print(thing[0], ':', thing[1], '=', str(thing[1]/omega*100), '%')
