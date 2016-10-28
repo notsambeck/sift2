@@ -120,9 +120,9 @@ def imR2Y(image):
 
 # coverts an image from YCC to RGB colorspace 0-255
 def imY2R(image):
-    out = np.zeros((3, 32, 32), dtype='float32')
-    for row in range(32):
-        for col in range(32):
+    out = np.zeros(image.shape, dtype='float32')
+    for row in range(image.shape[-1]):
+        for col in range(image.shape[-1]):
             out[:, row, col] = y2rVector(image[:, row, col])
     return out
 
@@ -176,6 +176,7 @@ def dct_matrix(n):
     return(d)
 
 dctMatrix = dct_matrix(32)
+dct128 = dct_matrix(128)
 
 
 # DCTII creates YCC transform values from YCC pixel values
@@ -195,6 +196,15 @@ def idct(trans):
         # print trans.shape, dctMatrix.shape, i
         img[i] = np.dot(np.dot(np.transpose(dctMatrix), trans[i]),
                         dctMatrix)
+    return img
+
+
+def idct128(trans):
+    bigtrans = np.zeros((3, 128, 128), dtype=trans.dtype)
+    bigtrans[:, :32, :32] = trans
+    img = np.ndarray((3, 128, 128), dtype='float32')
+    for i in range(3):
+        img[i] = np.dot(np.dot(np.transpose(dct128), bigtrans[i]), dct128)
     return img
 
 
