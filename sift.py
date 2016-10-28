@@ -9,6 +9,7 @@ from kivy.properties import NumericProperty
 from kivy.uix.gridlayout import GridLayout
 import numpy as np
 import dataset
+from dataset import imY2R, idct, idct128
 from nolearn.lasagne import NeuralNet
 import lasagne
 import pickle
@@ -23,9 +24,9 @@ import datetime
 increment = 201
 
 omega = 500    # number of images to analyze in CIFAR
-imageSize = 32  # number of 'pixels' in generated images
-scaleL = 20      # number of screen pixels for big, small
-scaleS = 20
+imageSize = 128  # number of 'pixels' in generated images
+scaleL = 4      # number of screen pixels for big, small
+scaleS = 4
 # scale is number of screen pixels per SIFT pixel
 
 
@@ -73,21 +74,16 @@ savednet = NeuralNet(
     dense3_num_units=512,
     dense3_nonlinearity=lasagne.nonlinearities.rectify,
     dropout3_p=0.5,
-    output_nonlinearity=lasagne.nonlinearities.softmax,
-    output_num_units=2,
+    output_nonlinearity=None,
+    output_num_units=1,
     update=nesterov_momentum,
     update_learning_rate=0.007,
     update_momentum=.9,
     max_epochs=1000,
     verbose=2,
-    regression=False)
+    regression=True)
 
 savednet.load_params_from('net.net')
-
-
-class ImagePickler(pickle.Pickler):
-    def persistent_id(self, obj):
-        return(obj[1])
 
 
 class SiftWidget(Widget):
@@ -95,8 +91,9 @@ class SiftWidget(Widget):
                        dtype='float32').reshape((3, 32, 32), order='F')
     images_found = NumericProperty(0)
     images_shown = NumericProperty(0)
-    best = 0.0
+    update_best = False
     bestImage = np.zeros((3, imageSize, imageSize))
+    currentImage = np.zeros((3, imageSize, imageSize))
 
     if not os.path.exists('found_images'):
         os.makedirs('found_images')
@@ -107,33 +104,29 @@ class SiftWidget(Widget):
     print('saving to:', directory)
 
     def update(self, dt):
-        self.canvas.clear()
+        t = nextTransformNarrow(self.counter)
+        self.updateBest = False
+        self.images_shown += 1
+        image = imY2R(idct128(t))
+        toNet = np.zeros((1, 3, 32, 32), dtype='float32')
+        toNet[0] = np.divide(np.subtract(imY2R(idct(t)), 128.), 128.)
+        p = savednet.predict(toNet)[0]
+        if p >= .5:
+            # prob = str(p)[2:4]
+            self.images_found += 1
+            print('Image found, probabilty:', prob, '%.   #',
+                  self.images_found, 'of', self.images_shown)
+            s = Image.fromarray(dataset.orderPIL(image))
+            s.save(''.join([self.directory, '/', str(self.images_found),
+                            '.png']))
+            self.bestImage = np.divide(image, 255.)
         self.counter = np.add(self.counter, increment)
         self.counter = np.mod(self.counter, quantization)
         self.showImage()
         self.showBest()
 
     def showImage(self):
-        # uses dataset.genycc on loaded data from pickle
-        # t = dataset.genycc(cifarMaxTransform, cifarMinTransform, sigma='.03')
-        t = nextTransformNarrow(self.counter)
-        self.updateBest = 0
-        self.images_shown += 1
-        image = dataset.imY2R(dataset.idct(t))
-        toNet = np.zeros((1, 3, 32, 32), dtype='float32')
-        toNet[0] = np.divide(np.subtract(image, 128.), 128.)
-        p = savednet.predict(toNet)[0]
-        if p == 1:
-            # prob = str(p)[2:4]
-            self.images_found += 1
-            # print('Image found, probabilty:', prob, '%.   #',
-            #       self.images_found, 'of', self.images_shown)
-            s = Image.fromarray(dataset.orderPIL(image))
-            s.save(''.join([self.directory, '/', str(self.images_found),
-                            '.png']))
-            self.best = max(self.best, p)
-            self.bestImage = np.divide(image, 255.)
-
+        self.canvas.clear()
         with self.canvas:
             for j in range(imageSize):
                 for i in range(imageSize):
