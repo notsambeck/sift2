@@ -21,7 +21,7 @@ import os
 import datetime
 
 # all important increment; this is locked in for training experiments at 201
-increment = 201
+increment = 42552
 
 omega = 500    # number of images to analyze in CIFAR
 imageSize = 32  # number of 'pixels' in generated images
@@ -96,6 +96,7 @@ class SiftWidget(Widget):
     currentImage = np.zeros((3, imageSize, imageSize), dtype='float32')
     slider = [0, 0]
     toNet = np.zeros((1, 3, 32, 32), dtype='float32')
+    pct = .15
 
     # setup save path
     if not os.path.exists('found_images'):
@@ -116,7 +117,7 @@ class SiftWidget(Widget):
         p = savednet.predict(self.toNet)[0]
 
         # either update best image, or refine it
-        if p >= 0.03:
+        if p >= 0.5:
             prob = str(p)[2:6]
             print('')
             # save old best image (now altered)
@@ -132,14 +133,18 @@ class SiftWidget(Widget):
                             '.png']))
             self.bestImage = self.currentImage
             self.workingT = t
+            self.pct = .15
             self.slider = [0, 0]
         else:
-            self.workingT, self.workingScore = imageTweaker(self.workingT, p, self.slider)
+            self.workingT, self.workingScore = imageTweaker(self.workingT, p,
+                                                            self.slider,
+                                                            pct=self.pct)
             self.bestImage = imY2R(idct(self.workingT))
             # move slider
             if self.slider[0] == 0:
                 self.slider[0] = self.slider[1]+1
-                if self.slider[0] == 31:
+                if self.slider[0] == 32:
+                    self.pct = self.pct/2.0
                     self.slider[0] = 0
                     self.slider[1] = 0
                 else:
@@ -149,7 +154,6 @@ class SiftWidget(Widget):
         self.counter = np.add(self.counter, increment)
         self.counter = np.mod(self.counter, quantization)
 
-        
         self.canvas.clear()
         self.showBest()
         self.showImage()
@@ -206,7 +210,7 @@ def imageTweaker(transform, oldP, pos, pct=.15):
             newP = savednet.predict(np.divide(np.subtract(image, 128.), 128.))
             if debug: print('therefore tried again: p is now:', newP)
     if newP < oldP:
-        print('made it worse, revert!')
+        if debug: print('made it worse, revert!')
         return(hold, oldP)
     else:
         return(transform, newP)
