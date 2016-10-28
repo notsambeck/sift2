@@ -6,10 +6,9 @@ from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle
 from kivy.clock import Clock
 from kivy.properties import NumericProperty
-from kivy.uix.gridlayout import GridLayout
 import numpy as np
 import dataset
-from dataset import imY2R, idct, idct128
+from dataset import imY2R, idct
 from dataset import nextTransformNarrow, quantization
 from nolearn.lasagne import NeuralNet
 import lasagne
@@ -21,13 +20,14 @@ import os
 import datetime
 
 # all important increment; this is locked in for training experiments at 201
-increment = 42552
+increment = 9821
 
 omega = 500    # number of images to analyze in CIFAR
 imageSize = 32  # number of 'pixels' in generated images
-scale = 20
+scale = 26
+padx = 50
+pady = 200
 # scale is number of screen pixels per SIFT pixel
-
 
 cmax, cmean, cmin, cstd = dataset.loadCifarTransforms()
 
@@ -96,7 +96,6 @@ class SiftWidget(Widget):
     currentImage = np.zeros((3, imageSize, imageSize), dtype='float32')
     slider = [0, 0]
     toNet = np.zeros((1, 3, 32, 32), dtype='float32')
-    pct = .15
 
     # setup save path
     if not os.path.exists('found_images'):
@@ -114,42 +113,33 @@ class SiftWidget(Widget):
         self.currentImage = imY2R(idct(t))
 
         self.toNet[0] = np.divide(np.subtract(imY2R(idct(t)), 128.), 128.)
-        p = savednet.predict(self.toNet)[0]
+        p = savednet.predict(self.toNet)
 
         # either update best image, or refine it
         if p >= 0.5:
-            prob = str(p)[2:6]
-            print('')
+            prob = str(p)[3:7]
             # save old best image (now altered)
             b = Image.fromarray(dataset.orderPIL(self.bestImage))
             b.save(''.join([self.directory, '/', str(self.images_found),
-                            '_tweaked.png']))
+                            '_alt_', str(self.workingScore)[3:7], '.png']))
             # now save new image
             self.images_found += 1
             print('Image found, probabilty:', prob, '%.   #',
                   self.images_found, 'of', self.images_shown)
             s = dataset.toPIL(self.toNet[0])
             s.save(''.join([self.directory, '/', str(self.images_found),
-                            '.png']))
+                            '_', prob, '.png']))
             self.bestImage = self.currentImage
             self.workingT = t
             self.pct = .15
-            self.slider = [0, 0]
+            self.workingScore = p
         else:
-            self.workingT, self.workingScore = imageTweaker(self.workingT, p,
-                                                            self.slider,
-                                                            pct=self.pct)
+            self.workingT, self.workingScore = imageTweaker(self.workingT,
+                                                            self.workingScore,
+                                                            self.slider)
             self.bestImage = imY2R(idct(self.workingT))
             # move slider
-            if self.slider[0] == 0:
-                self.slider[0] = self.slider[1]+1
-                if self.slider[0] == 32:
-                    self.pct = self.pct/2.0
-                    self.slider[0] = 0
-                    self.slider[1] = 0
-                else:
-                    self.slider[1] += 1
-                    self.slider[0] -= 1
+            self.slider = np.random.randint(32, size=2)
 
         self.counter = np.add(self.counter, increment)
         self.counter = np.mod(self.counter, quantization)
@@ -164,7 +154,7 @@ class SiftWidget(Widget):
                 for i in range(imageSize):
                     pixel = np.divide(self.currentImage[:, j, i], 255.)
                     Color(*pixel)
-                    Rectangle(pos=(i*scale, (imageSize-1-j)*scale),
+                    Rectangle(pos=(padx+i*scale, pady+(imageSize-1-j)*scale),
                               size=(scale, scale))
 
     def showBest(self):
@@ -173,8 +163,8 @@ class SiftWidget(Widget):
                 for i in range(imageSize):
                     pixel = np.divide(self.bestImage[:, j, i], 255.)
                     Color(*pixel)
-                    Rectangle(pos=(i*scale + (imageSize+4)*scale,
-                                   (imageSize-1-j)*scale),
+                    Rectangle(pos=(i*scale + (imageSize+8)*scale,
+                                   (imageSize-1-j)*scale+pady),
                               size=(scale, scale))
 
 
@@ -186,31 +176,41 @@ class SiftApp(App):
         return sift
 
 
-# imageTweaker implements ultra-shitty gradient descent on images
-def imageTweaker(transform, oldP, pos, pct=.15):
+# imageTweaker implements ultra-shitty stochastic gradient descent on images
+def imageTweaker(transform, oldP, pos, pct=1.50):
     debug = False
-    if debug: print('tweaking, starting score =', oldP, 'on transform coef =', pos)
+    x = pos[0]
+    y = pos[1]
+    if debug:
+        print('tweaking, starting score =', oldP, 'on transform coef =', pos)
     image = np.zeros((1, 3, 32, 32), dtype='float32')
     hold = np.copy(transform)
     for i in range(3):
-        if debug: print('was', transform[i, pos[0], pos[1]])
-        transform[i, pos[0], pos[1]] = np.add(transform[i, pos[0], pos[1]],
-                                              np.multiply(cstd[i, pos[0], pos[1]],
-                                                          pct))
+        r = np.random.randn()
+        if debug:
+            print('was', transform[i, x, y])
+        transform[i, x, y] = np.add(transform[i, x, y],
+                                    np.multiply(cstd[i, x, y],
+                                                r*pct))
+        transform[i] = np.clip(transform[i], cmin[i], cmax[i])
         image[0] = imY2R(idct(transform))
-        newP = savednet.predict(np.divide(np.subtract(image, 128.), 128.))
+        newP = savednet.predict(np.divide(np.subtract(image, 128.), 128.))[[0]]
         if debug:
             print('channel =', i, ' first try newP =', newP)
-            print('now:', transform[i, pos[0], pos[1]])
+            print('now:', transform[i, x, y])
         if newP < oldP:
-            transform[i, pos[0], pos[1]] = np.add(transform[i, pos[0], pos[1]],
-                                                  np.multiply(cstd[i, pos[0], pos[1]],
-                                                              (-2.)*pct))
+            transform[i, pos[0], pos[1]] = np.add(hold[i, x, y],
+                                                  np.multiply(cstd[i, x, y],
+                                                              (-1.)*pct*r))
+            transform[i] = np.clip(transform[i], cmin[i], cmax[i])
             image[0] = imY2R(idct(transform))
-            newP = savednet.predict(np.divide(np.subtract(image, 128.), 128.))
-            if debug: print('therefore tried again: p is now:', newP)
+            newP = savednet.predict(np.divide(np.subtract(image, 128.),
+                                              128.))[[0]]
+            if debug:
+                print('therefore tried again: p is now:', newP)
     if newP < oldP:
-        if debug: print('made it worse, revert!')
+        if debug:
+            print('made it worse, revert!')
         return(hold, oldP)
     else:
         return(transform, newP)
