@@ -25,8 +25,7 @@ increment = 201
 
 omega = 500    # number of images to analyze in CIFAR
 imageSize = 128  # number of 'pixels' in generated images
-scaleL = 4      # number of screen pixels for big, small
-scaleS = 4
+scale = 4      # number of screen pixels for big, small
 # scale is number of screen pixels per SIFT pixel
 
 
@@ -132,8 +131,8 @@ class SiftWidget(Widget):
                 for i in range(imageSize):
                     pixel = np.divide(image[:, j, i], 255.)
                     Color(*pixel)
-                    Rectangle(pos=(i*scaleL, (imageSize-1-j)*scaleL),
-                              size=(scaleL, scaleL))
+                    Rectangle(pos=(i*scale, (3*imageSize+2-j*scale)),
+                              size=(scale, scale))
 
     def showBest(self):
         with self.canvas:
@@ -141,10 +140,28 @@ class SiftWidget(Widget):
                 for i in range(imageSize):
                     pixel = self.bestImage[:, j, i]
                     Color(*pixel)
-                    Rectangle(pos=(i*scaleS + (imageSize+4)*scaleL,
-                                   (imageSize-1-j)*scaleS),
-                              size=(scaleS, scaleS))
+                    Rectangle(pos=((i*scale + imageSize+4)*scale,
+                                   (3*imageSize-1-j)*scale),
+                              size=(scale, scale))
 
+    def showAbstract(self):
+        with self.canvas:
+            for j in range(imageSize):
+                for i in range(imageSize):
+                    pixel = self.abstractsunsetImage[:, j, i]
+                    Color(*pixel)
+                    Rectangle(pos=(i*scale + (imageSize+4)*scale,
+                                   (imageSize-1-j)*scale),
+                              size=(scale, scale))
+    def showSunset(self):
+        with self.canvas:
+            for j in range(imageSize):
+                for i in range(imageSize):
+                    pixel = self.sunsetImage[:, j, i]
+                    Color(*pixel)
+                    Rectangle(pos=(i*scale + (imageSize+4)*scale,
+                                   (imageSize-1-j)*scale),
+                              size=(scale, scale))
 
 class DualWindow(GridLayout):
     def __init__(self, **kwargs):
@@ -170,23 +187,3 @@ class SiftApp(App):
         sift = SiftWidget()
         Clock.schedule_interval(sift.update, .033)
         return sift
-
-
-class CifarWidget(Widget):
-    tick = NumericProperty(0)
-
-    def update(self, dt):
-        self.canvas.clear()
-        transform = cifarTransformDistribution[self.tick]
-        im = dataset.imY2R(dataset.idct(dataset.chop(transform, .75)))
-        self.showImage(np.divide(im, 255.))
-        self.tick += 1
-
-    def showImage(self, image):
-        with self.canvas:
-            for i in range(imageSize):
-                for j in range(imageSize):
-                    Color(*image[:, j, i])
-                    Rectangle(pos=(i*scaleS+33*scaleL, (32-j)*scaleS),
-                              size=(scaleS, scaleS))
-

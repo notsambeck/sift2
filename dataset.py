@@ -302,6 +302,22 @@ def buildDataset(omega):
             label[0:split], label[split:n*omega])
 
 
+def combineData(x1, y1, x2, y2):
+    if x1.max() != x2.max():
+        raise ValueError('different dtypes in data to combine')
+    x = np.zeros((x1.shape[0]+x2.shape[0], 3, 32, 32), dtype='float32')
+    y = np.zeros(x1.shape[0]+x2.shape[0], dtype='uint8')
+    x[:x1.shape[0]] = x1
+    x[x1.shape[0]:] = x2
+    y[:x1.shape[0]] = y1
+    y[x1.shape[0]:] = y2
+    state = np.random.get_state()
+    np.random.shuffle(x)
+    np.random.set_state(state)
+    np.random.shuffle(y)
+    return x, y
+
+
 def buildTransformsIncremented(omega, inc=44777):
     out = np.zeros((omega, 3, 32, 32), dtype='float32')
     count = np.zeros((3, 32, 32), dtype='float32')
@@ -345,6 +361,7 @@ def saveDataset(filename, x, xt, y, yt):
     out.close()
 
 
+# call: x, xt, y, yt = loadDataset('
 def loadDataset(filename):
     f = open(filename, 'rb')
     x = pickle.load(f)
@@ -463,3 +480,15 @@ def nextTransformWide(count, quantization=quantization):
                                                    quantization),
                                          count))
     return transform
+
+
+# vec2int converts vector NN output to an integer
+# either update best image, or refine it
+def vec2int(vector):
+    out = 0
+    biggest = 0
+    for i in range(vector.shape[0]):
+        if vector[i] > biggest:
+            biggest = vector[i]
+            out = i
+    return out
