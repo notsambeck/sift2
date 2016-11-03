@@ -20,13 +20,13 @@ import os
 import datetime
 
 # all important increment; this is locked in for training experiments at 201
-increment = 9821
+increment = 444
 
 omega = 500    # number of images to analyze in CIFAR
 imageSize = 32  # number of 'pixels' in generated images
-scale = 26
-padx = 50
-pady = 200
+scale = 16
+padx = 23*scale
+pady = 3*scale
 # scale is number of screen pixels per SIFT pixel
 
 cmax, cmean, cmin, cstd = dataset.loadCifarTransforms()
@@ -72,16 +72,28 @@ savednet = NeuralNet(
     dense3_num_units=512,
     dense3_nonlinearity=lasagne.nonlinearities.rectify,
     dropout3_p=0.5,
-    output_nonlinearity=None,
-    output_num_units=1,
+    output_nonlinearity=lasagne.nonlinearities.softmax,
+    output_num_units=4,
     update=nesterov_momentum,
-    update_learning_rate=0.007,
+    update_learning_rate=0.01,
     update_momentum=.9,
     max_epochs=1000,
     verbose=2,
-    regression=True)
+    regression=False)
 
-savednet.load_params_from('regression.net')
+savednet.load_params_from('4_class_net.nn')
+classes = 4
+
+
+# either update best image, or refine it
+def vec2int(vector):
+    out = 0
+    biggest = 0
+    for i in range(4):
+        if vector >= biggest:
+            biggest = vector[i]
+            out = i
+    return out
 
 
 class SiftWidget(Widget):
@@ -89,8 +101,7 @@ class SiftWidget(Widget):
                        dtype='float32').reshape((3, 32, 32), order='F')
     images_found = NumericProperty(0)
     images_shown = NumericProperty(0)
-    update_best = False
-    bestImage = np.zeros((3, imageSize, imageSize), dtype='float32')
+    best = np.zeros((classes, 3, imageSize, imageSize), dtype='float32')
     workingT = np.zeros((3, 32, 32), dtype='float32')
     workingScore = 0.0
     currentImage = np.zeros((3, imageSize, imageSize), dtype='float32')
@@ -110,34 +121,39 @@ class SiftWidget(Widget):
         t = nextTransformNarrow(self.counter)
         self.updateBest = False
         self.images_shown += 1
-        self.currentImage = imY2R(idct(t))
+        self.best[0] = imY2R(idct(t))
 
         self.toNet[0] = np.divide(np.subtract(imY2R(idct(t)), 128.), 128.)
-        p = savednet.predict(self.toNet)
+        p = savednet.predict(self.toNet)[0]
 
-        # either update best image, or refine it
-        if p >= 0.5:
-            prob = str(p)[3:7]
+        probable = p
+
+        if probable >= 1:
             # save old best image (now altered)
-            b = Image.fromarray(dataset.orderPIL(self.bestImage))
+            b = Image.fromarray(dataset.orderPIL(self.best[1]))
             b.save(''.join([self.directory, '/', str(self.images_found),
                             '_alt_', str(self.workingScore)[3:7], '.png']))
             # now save new image
             self.images_found += 1
-            print('Image found, probabilty:', prob, '%.   #',
+            print('Image found, probably a:', probable, ' #',
                   self.images_found, 'of', self.images_shown)
             s = dataset.toPIL(self.toNet[0])
             s.save(''.join([self.directory, '/', str(self.images_found),
-                            '_', prob, '.png']))
-            self.bestImage = self.currentImage
+                            '_', str(probable), '.png']))
+            self.best[1] = self.best[0]
             self.workingT = t
             self.pct = .15
-            self.workingScore = p
+            self.workingScore = probable
+            if probable == 2:
+                self.best[2] = self.best[0]
+            elif probable == 3:
+                self.best[3] = self.best[0]
         else:
+            self.best[0] = imY2R(idct(t))
             self.workingT, self.workingScore = imageTweaker(self.workingT,
                                                             self.workingScore,
                                                             self.slider)
-            self.bestImage = imY2R(idct(self.workingT))
+            self.best[1] = imY2R(idct(self.workingT))
             # move slider
             self.slider = np.random.randint(32, size=2)
 
@@ -147,24 +163,47 @@ class SiftWidget(Widget):
         self.canvas.clear()
         self.showBest()
         self.showImage()
+        self.showAbstract()
+        self.showSunset()
 
     def showImage(self):
         with self.canvas:
             for j in range(imageSize):
                 for i in range(imageSize):
-                    pixel = np.divide(self.currentImage[:, j, i], 255.)
+                    pixel = np.divide(self.best[0, :, j, i], 255.)
                     Color(*pixel)
-                    Rectangle(pos=(padx+i*scale, pady+(imageSize-1-j)*scale),
+                    Rectangle(pos=(padx+i*scale,
+                                   pady+(2*imageSize+2-j)*scale),
                               size=(scale, scale))
 
     def showBest(self):
         with self.canvas:
             for j in range(imageSize):
                 for i in range(imageSize):
-                    pixel = np.divide(self.bestImage[:, j, i], 255.)
+                    pixel = np.divide(self.best[1, :, j, i], 255.)
                     Color(*pixel)
-                    Rectangle(pos=(i*scale + (imageSize+8)*scale,
-                                   (imageSize-1-j)*scale+pady),
+                    Rectangle(pos=(4*scale+padx+i*scale+imageSize*scale,
+                                   pady+(2*imageSize+2-j)*scale),
+                              size=(scale, scale))
+
+    def showAbstract(self):
+        with self.canvas:
+            for j in range(imageSize):
+                for i in range(imageSize):
+                    pixel = np.divide(self.best[2, :, j, i], 255.)
+                    Color(*pixel)
+                    Rectangle(pos=(padx+i*scale,
+                                   pady+(imageSize-1-j)*scale),
+                              size=(scale, scale))
+
+    def showSunset(self):
+        with self.canvas:
+            for j in range(imageSize):
+                for i in range(imageSize):
+                    pixel = np.divide(self.best[3, :, j, i], 255.)
+                    Color(*pixel)
+                    Rectangle(pos=(4*scale+padx+i*scale+imageSize*scale,
+                                   pady+(imageSize-1-j)*scale),
                               size=(scale, scale))
 
 
@@ -177,7 +216,9 @@ class SiftApp(App):
 
 
 # imageTweaker implements ultra-shitty stochastic gradient descent on images
-def imageTweaker(transform, oldP, pos, pct=1.50):
+def imageTweaker(transform, vectorP, pos, pct=1.30):
+    oldP = vectorP
+
     debug = False
     x = pos[0]
     y = pos[1]
@@ -194,7 +235,11 @@ def imageTweaker(transform, oldP, pos, pct=1.50):
                                                 r*pct))
         transform[i] = np.clip(transform[i], cmin[i], cmax[i])
         image[0] = imY2R(idct(transform))
-        newP = savednet.predict(np.divide(np.subtract(image, 128.), 128.))[[0]]
+        holdP = savednet.predict(np.divide(np.subtract(image, 128.), 128.))
+        # either update best image, or refine it
+
+        newP = holdP
+
         if debug:
             print('channel =', i, ' first try newP =', newP)
             print('now:', transform[i, x, y])
