@@ -154,7 +154,6 @@ def y2rVector(YCCpixel):
 
 
 # converts to 0-255 RGB pixel for Kivy display
-# note that this shoud be vectorized TODO
 def y2r(pixel):
     Y, Cb, Cr = np.divide(pixel, 256.)
     R = max(min(255, 298.082 * Y + 408.583 * Cr - 222.921), 0)
@@ -176,7 +175,8 @@ def dct_matrix(n):
     return(d)
 
 dctMatrix = dct_matrix(32)
-dct128 = dct_matrix(128)
+bigSize = 512
+dctMatrixBig = dct_matrix(bigSize)
 
 
 # DCTII creates YCC transform values from YCC pixel values
@@ -193,18 +193,18 @@ def dct(img):
 def idct(trans):
     img = np.ndarray(trans.shape, dtype='float32')
     for i in range(trans.shape[0]):
-        # print trans.shape, dctMatrix.shape, i
         img[i] = np.dot(np.dot(np.transpose(dctMatrix), trans[i]),
                         dctMatrix)
     return img
 
 
-def idct128(trans):
-    bigtrans = np.zeros((3, 128, 128), dtype=trans.dtype)
+def idctBig(trans):
+    bigtrans = np.zeros((3, bigSize, bigSize), dtype=trans.dtype)
     bigtrans[:, :32, :32] = trans
-    img = np.ndarray((3, 128, 128), dtype='float32')
+    img = np.ndarray((3, bigSize, bigSize), dtype='float32')
     for i in range(3):
-        img[i] = np.dot(np.dot(np.transpose(dct128), bigtrans[i]), dct128)
+        img[i] = np.dot(np.dot(np.transpose(dctMatrixBig), bigtrans[i]),
+                        dctMatrixBig)
     return img
 
 
@@ -302,7 +302,7 @@ def buildDataset(omega):
             label[0:split], label[split:n*omega])
 
 
-def combineData(x1, y1, x2, y2):
+def combineData(x1, x2, y1, y2):
     if x1.max() != x2.max():
         raise ValueError('different dtypes in data to combine')
     x = np.zeros((x1.shape[0]+x2.shape[0], 3, 32, 32), dtype='float32')
@@ -409,9 +409,10 @@ def getImageYCC(n, dataset):
     return(imR2Y(getImage255(n, dataset)))
 
 
-# reorder an 0-255 image to 32,32,3 for PIL Image
+# reorder an 0-255 (3, x, x) image to (x, x, 3) for PIL
 def orderPIL(image):
-    out = np.zeros((32, 32, 3), dtype='uint8')
+    out = np.zeros((image.shape[1], image.shape[2], 3),
+                   dtype='uint8')
     for i in range(3):
         out[:, :, i] = image[i]
     return out
@@ -487,7 +488,7 @@ def nextTransformWide(count, quantization=quantization):
 def vec2int(vector):
     out = 0
     biggest = 0
-    for i in range(vector.shape[0]):
+    for i in range(vector.shape):
         if vector[i] > biggest:
             biggest = vector[i]
             out = i
