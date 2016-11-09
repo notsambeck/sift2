@@ -20,6 +20,7 @@ from nolearn.lasagne import NeuralNet
 from PIL import Image
 import os
 import datetime
+import pickle
 
 import import_batch
 
@@ -88,7 +89,7 @@ net = NeuralNet(
     regression=False)
 
 # for automated load of net
-net.load_params_from('abstract.net')
+net.load_params_from('abstract_v2.net')
 
 
 # do you want to train the network more? build a dataset & load here:
@@ -105,9 +106,16 @@ found_images = np.zeros((howManyToSave, 3, 32, 32), 'uint8')
 # non-visualized Sift program.  Runs omega images, counting by
 # increment.  net checks them, good ones are saved to a folder with
 # today's date & increment
-def Sift(increment=1999, omega=10**6, classes=4):
-    images_found = [0*classes]
+# note that continuing will save over any files
+def Sift(increment=1999, omega=10**8, classes=4, restart=True):
+    images_found = 0
     counter = np.zeros((3, 32, 32), dtype='float32')
+    if not restart:
+        print('loading saved state...')
+        f = open('save.file', 'rb')
+        counter = pickle.load(f)
+        images_found = pickle.load(f)
+        f.close()
 
     # make dir found_images
     if not os.path.exists('found_images'):
@@ -118,21 +126,28 @@ def Sift(increment=1999, omega=10**6, classes=4):
         os.makedirs(directory)
     print('saving to', directory)
 
-    for i in range(omega):
-        if np.mod(i, 10000) == 0:
-            print(i, 'processed... counter mean=', counter.mean())
+    for i in range(1, omega):
+        # save every 10^5th
+        if np.mod(i, 10**5) == 0:
+            print(i, 'processed... saving progress to save.file')
+            f = open('save.file', 'wb')
+            pickle.dump(counter, f)
+            pickle.dump(images_found, f)
+            f.close()
+
+        # create transform; turn into image and send scaled version to net
         t = dataset.nextTransformNarrow(counter)
         image = dataset.imY2R(dataset.idct(t))
         toNet = np.zeros((1, 3, 32, 32), dtype='float32')
         toNet[0] = np.divide(np.subtract(image, 128.), 128.)
         p = net.predict(toNet)[0]
         counter = np.mod(np.add(counter, increment), dataset.quantization)
-        if p <= 1:
+        if p >= 1:
             print('Class', p, 'image found:', images_found, 'of', i)
             s = Image.fromarray(dataset.orderPIL(image))
             s.save(''.join([directory, '/',
                             str(images_found),
-                            'class-', str(p),
+                            '_class-', str(p),
                             '.png']))
             if images_found < howManyToSave:
                 found_images[images_found] = image
