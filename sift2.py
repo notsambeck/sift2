@@ -20,7 +20,7 @@ import os
 import datetime
 
 # all important increment; this is locked in for training experiments at 201
-increment = 444
+increment = 2993
 
 omega = 500    # number of images to analyze in CIFAR
 imageSize = 32  # number of 'pixels' in generated images
@@ -81,19 +81,8 @@ savednet = NeuralNet(
     verbose=2,
     regression=False)
 
-savednet.load_params_from('4_class_net.nn')
+savednet.load_params_from('abstract_v2.net')
 classes = 4
-
-
-# either update best image, or refine it
-def vec2int(vector):
-    out = 0
-    biggest = 0
-    for i in range(4):
-        if vector >= biggest:
-            biggest = vector[i]
-            out = i
-    return out
 
 
 class SiftWidget(Widget):
