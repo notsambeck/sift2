@@ -9,7 +9,7 @@ from kivy.properties import NumericProperty
 from kivy.uix.gridlayout import GridLayout
 import numpy as np
 import dataset
-from dataset import imY2R, idct, idct128
+from dataset import imY2R, idct
 from nolearn.lasagne import NeuralNet
 import lasagne
 import pickle
