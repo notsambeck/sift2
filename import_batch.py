@@ -84,34 +84,35 @@ def tileDiagonal(image, imageSet, dim=(3, 3)):
 
 
 def fitImage(tiled, imageSet, pointer, mode):
+    o = 2   # overlap, set at 1 or more
     oldEdgeB = tiled[:,
-                     (pointer[0]-1)*32-1,
+                     (pointer[0]-1)*32-o:(pointer[0]-1)*32,
                      (pointer[1]-1)*32:pointer[1]*32]
-    print('range - bottom edge: row: ', (pointer[0]-1)*32+31,
-          'cols up to:', pointer[1]*32)
+    # print('range - bottom edge: row: ', (pointer[0]-1)*32+31,
+    #       'cols up to:', pointer[1]*32)
     oldEdgeR = tiled[:,
                      (pointer[0]-1)*32:pointer[0]*32,
-                     (pointer[1]-1)*32-1]
-    print('range - right  edge: rows up to:', pointer[0]*32,
-          'column:', (pointer[1]-1)*32+31)
+                     (pointer[1]-1)*32-o:(pointer[1]-1)*32]
+    # print('range - right  edge: rows up to:', pointer[0]*32,
+    #       'column:', (pointer[1]-1)*32+31)
     bestScore = 10.**10
     candidate = np.zeros((3, 32, 32), dtype='uint8')
     candidateNumber = 0
     for i in range(imageSet.shape[0]):
         if mode == 'below':
-            score = fitScore(imageSet[i, :, 1, :], oldEdgeB)
+            score = fitScore(imageSet[i, :, :o, :], oldEdgeB)
         elif mode == 'right':
-            score = fitScore(imageSet[i, :, :, 1], oldEdgeR)
+            score = fitScore(imageSet[i, :, :, :o], oldEdgeR)
         elif mode == 'both':
-            score = (fitScore(imageSet[i, :, 1, :], oldEdgeB) +
-                     fitScore(imageSet[i, :, :, 1], oldEdgeR))
+            score = (fitScore(imageSet[i, :, :o, :], oldEdgeB) +
+                     fitScore(imageSet[i, :, :, :o], oldEdgeR))
         else:
             raise IOError("invalid mode")
 
         if score < bestScore:
             candidate = imageSet[i]
             bestScore = score
-            print(score)
+            # print(score)
             candidateNumber = i  # if you want to remove from set
     tiled[:, (pointer[0]-1)*32:pointer[0]*32,
           (pointer[1]-1)*32:pointer[1]*32] = candidate

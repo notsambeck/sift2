@@ -460,6 +460,10 @@ narrowScale = 1.6
 clow = np.subtract(cmean, np.multiply(narrowScale, cstd))
 cmult = np.divide(np.multiply(2.0*narrowScale, cstd), quantization)
 
+scaler = np.array([[[0.5]],
+                   [[1.5]],
+                   [[1.5]]])
+
 
 # count neeeds to be float32 dtype or things get weird!
 # CREATE NEXT IMAGE USING A COUNTER MATRIX
@@ -467,8 +471,16 @@ cmult = np.divide(np.multiply(2.0*narrowScale, cstd), quantization)
 def nextTransformNarrow(count):
     if count.dtype != 'float32':
         raise ValueError(count.dtype)
+    return np.add(clow, np.multiply(count, cmult))
+
+
+def nextTransformAdjustable(count):
+    if count.dtype != 'float32':
+        raise ValueError(count.dtype)
     transform = np.add(clow, np.multiply(count, cmult))
-    return transform
+    new = np.multiply(transform, scaler)
+    new[:, 0, 0] = transform[:, 0, 0]
+    return new
 
 
 # create next image in full range - min to max.
