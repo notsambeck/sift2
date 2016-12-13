@@ -7,6 +7,8 @@ from math import cos, pi
 import matplotlib.pyplot as plt
 from PIL import Image
 
+import import_batch
+
 
 omega = 1000
 
@@ -460,9 +462,9 @@ narrowScale = 1.6
 clow = np.subtract(cmean, np.multiply(narrowScale, cstd))
 cmult = np.divide(np.multiply(2.0*narrowScale, cstd), quantization)
 
-scaler = np.array([[[0.5]],
-                   [[1.5]],
-                   [[1.5]]])
+scaler = np.array([[[1]],
+                   [[1.2]],
+                   [[1.2]]])
 
 
 # count neeeds to be float32 dtype or things get weird!
