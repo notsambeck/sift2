@@ -88,7 +88,7 @@ net = NeuralNet(
     verbose=2,
     regression=False)
 
-# for automated load of net
+# for automated load of net CURRENT WORKING NET abstract_V2.net
 net.load_params_from('abstract_v2.net')
 
 
@@ -128,15 +128,16 @@ def Sift(increment=1999, omega=10**8, classes=4, restart=True):
 
     for i in range(1, omega):
         # save every 10^5th
-        if np.mod(i, 10**5) == 0:
-            print(i, 'processed... saving progress to save.file')
-            f = open('save.file', 'wb')
-            pickle.dump(counter, f)
-            pickle.dump(images_found, f)
-            f.close()
+        if not restart:
+            if np.mod(i, 10**5) == 0:
+                print(i, 'processed... saving progress to save.file')
+                f = open('save.file', 'wb')
+                pickle.dump(counter, f)
+                pickle.dump(images_found, f)
+                f.close()
 
         # create transform; turn into image and send scaled version to net
-        t = dataset.nextTransformNarrow(counter)
+        t = dataset.nextTransformAdjustable(counter)
         image = dataset.imY2R(dataset.idct(t))
         toNet = np.zeros((1, 3, 32, 32), dtype='float32')
         toNet[0] = np.divide(np.subtract(image, 128.), 128.)
