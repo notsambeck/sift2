@@ -35,6 +35,9 @@ devMode = False
 if devMode:
     (cifarMaxTransform, cifarMeanTransform, cifarMinTransform,
      cifarStdDev) = dataset.loadCifarTransforms()
+    v = 2
+else:
+    v = 0
 
 # call net.save_params_to('filename.pkl') to create & save file
 savednet = NeuralNet(
@@ -83,7 +86,7 @@ savednet = NeuralNet(
     update_learning_rate=0.007,
     update_momentum=.9,
     max_epochs=1000,
-    verbose=2,
+    verbose=v,
     regression=True)
 
 
@@ -106,15 +109,21 @@ class SiftWidget(Widget):
     texture_size = ObjectProperty()
     directory = ""
 
+    print("Initializing SIFT...")
+    print('')
+
     restart = False
     if not restart:
         if os.path.exists('visualized.file'):
-            print('loading saved state...')
             f = open('visualized.file', 'rb')
             counter = pickle.load(f)
             images_found = pickle.load(f)
+            print('Loading saved state...Images already found:', images_found)
             f.close()
-    
+
+    print('')
+    print('Kivy status:')
+
     # save routine (optional)
     save = False
     if save:
@@ -156,7 +165,7 @@ class SiftWidget(Widget):
         self.canvas.clear()
         self.showImage(p)
         self.showBest()
-        if np.mod(self.images_shown, 10**2) == 0:
+        if np.mod(self.images_shown, 10**4) == 0:
             print(self.images_shown, 'processed... saving to visualized.file')
             f = open('visualized.file', 'wb')
             pickle.dump(self.counter, f)

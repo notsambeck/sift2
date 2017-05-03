@@ -12,6 +12,17 @@ Given the scale of the numbers involved, the best strategy for answering this qu
 
 SIFT is built from a bunch of pre-existing tools, which can be found in requirements.txt. It should not be dependent on CUDA, but it will benefit from CUDA / GPU acceleration.
 
-Install the requirements (ideally in a virtualenv) and then run either of these in Python 3:
+INSTALLATION INSTRUCTIONS (Linux)
+1. clone SIFT2 repository from Github:
+git clone https://github.com/thesambeck/sift2
+
+2. Install the requirements (ideally inside virtualenv) for Python 3 with PIP:
+pip install -r requirements 
+
+3. Upgrade Lasagne and Theano to newest version
+pip install --upgrade https://github.com/Theano/Theano/archive/master.zip
+pip install --upgrade https://github.com/Lasagne/Lasagne/archive/master.zip
+
+4. Run SIFT (visualized or not) in Python 3:
 python sift.py
 python sift-nonvisual.py
