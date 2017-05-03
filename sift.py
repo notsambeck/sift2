@@ -5,6 +5,7 @@ from kivy.app import App
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle
 from kivy.clock import Clock
+from kivy.properties import NumericProperty
 from kivy.properties import StringProperty
 from kivy.properties import ObjectProperty
 from kivy.core.text import Label as CoreLabel
@@ -12,47 +13,30 @@ import numpy as np
 import dataset
 from dataset import imY2R, idct
 from nolearn.lasagne import NeuralNet
-from nolearn.lasagne import visualize
-from matplotlib import pyplot as plt
 import lasagne
 import pickle
+from PIL import Image
 from lasagne import layers
 from lasagne.updates import nesterov_momentum
 from dataset import nextTransformAdjustable, quantization
 import os
 import datetime
 
-<<<<<<< .merge_file_Ga2pQ9
-# increment between transforms. Two instances of SIFT with different increments
-# will see overlapping images once every LCM(i1, i2)
+# all important increment
 increment = 291
 
-imageSize = 32  # images are 32p x 32p; DIMENSIONS ARE CURRENTLY FIXED
-=======
-# all important increment; this is locked in for training experiments at 201
-increment = 91
-
-omega = 500    # number of images to analyze in CIFAR
 imageSize = 32  # number of 'pixels' in generated images
-scale = 19      # number of screen pixels for big, small
-# scale is number of screen pixels per SIFT pixel
-padX = 22
-padY = 20
->>>>>>> .merge_file_S09MX9
+scale = 27      # number of screen pixels per SIFT pixel
 
-# screen size settings: Scale=27, padX=60, padY=80 fills 1920x1200 monitor
-scale = 27      # number of screen pixels per image pixel
-padX = 60       # cosmetic image padding
+padX = 60
 padY = 80
 
-# devMode provides datasets for training
 devMode = False
 if devMode:
     (cifarMaxTransform, cifarMeanTransform, cifarMinTransform,
      cifarStdDev) = dataset.loadCifarTransforms()
 
-# call net.save_params_to('filename.pkl') to create & save
-# current neural net as a file
+# call net.save_params_to('filename.pkl') to create & save file
 savednet = NeuralNet(
     layers=[('input', layers.InputLayer),
             ('conv2d1', layers.Conv2DLayer),
@@ -102,16 +86,15 @@ savednet = NeuralNet(
     verbose=2,
     regression=True)
 
-# choose a saved neural net to evaluate images
+
 savednet.load_params_from('regression.net')
 
 
-# Kivy widget that displays SIFT images
 class SiftWidget(Widget):
     counter = np.array(range(1, 3072000, 1000),
                        dtype='float32').reshape((3, 32, 32), order='F')
-    images_found = 0
-    images_processed_8 = 0
+    images_found = NumericProperty(0)
+    images_shown = NumericProperty(0)
     prob = StringProperty()
     update_best = False
     bestImage = np.zeros((3, imageSize, imageSize))
@@ -123,94 +106,63 @@ class SiftWidget(Widget):
     texture_size = ObjectProperty()
     directory = ""
 
-    # If restart, sift will start a new image sequence from zero.
-    # Otherwise it loads progress from 'visualized.file'
     restart = False
     if not restart:
-        f = open('visualized.file', 'rb')
-        counter = pickle.load(f)
-        images_found = pickle.load(f)
-        images_processed_8 = pickle.load(f)
-        print('loading saved state... already processed:',
-              images_processed_8*8, ' Already found:', images_found)
-        f.close()
-<<<<<<< .merge_file_Ga2pQ9
-
-    # if save, SIFT will save a .png copy of each image it finds
-    # to: --SIFT--directory--/found_images/--start--date--/####.png
-=======
+        if os.path.exists('visualized.file'):
+            print('loading saved state...')
+            f = open('visualized.file', 'rb')
+            counter = pickle.load(f)
+            images_found = pickle.load(f)
+            f.close()
     
     # save routine (optional)
->>>>>>> .merge_file_S09MX9
-    save = True
+    save = False
     if save:
-        directory = "".join(['found_images/',
-                             str(datetime.date.today()),
-                             'visual_increment-', str(increment)])
         if not os.path.exists('found_images'):
             os.makedirs('found_images')
+            directory = "".join(['found_images/',
+                                 str(datetime.date.today()),
+                                 'visual_increment-', str(increment)])
             if not os.path.exists(directory):
                 os.makedirs(directory)
                 print('saving to:', directory)
 
     def update(self, dt):
+        t = nextTransformAdjustable(self.counter)
         self.updateBest = False
+        self.images_shown += 1
+        self.image = imY2R(idct(t))
         toNet = np.zeros((1, 3, 32, 32), dtype='float32')
-        tenP = 0
-        # run 8 images before showing best
-        for i in range(8):
-            t = nextTransformAdjustable(self.counter)
-            toNet[0] = np.divide(np.subtract(imY2R(idct(t)), 128.), 128.)
-            p = savednet.predict(toNet)[0]
-            if p > tenP:
-                tenP = p
-                tenT = t
-            self.counter = np.add(self.counter, increment)
-            self.counter = np.mod(self.counter, quantization)
-        self.images_processed_8 += 1
-        self.image = imY2R(idct(tenT))
-        self.prob = str(tenP)[2:8]
+        toNet[0] = np.divide(np.subtract(imY2R(idct(t)), 128.), 128.)
+        p = savednet.predict(toNet)[0]
+        self.prob = str(p)[2:8]
         self.currentLabel.text = self.prob
         self.currentLabel.refresh()
         self.currentTexture = self.currentLabel.texture
-        if tenP >= .005:
+        if p >= .5:
             self.bestLabel.text = self.prob
             self.bestLabel.refresh()
             self.bestTexture = self.bestLabel.texture
             self.images_found += 1
             print('Image found, probabilty:', self.prob, '%.   #',
-                  self.images_found, 'of', self.images_processed_8*8)
+                  self.images_found, 'of', self.images_shown)
             if self.save:
-                visualize.plot_saliency(savednet, toNet)
-                sdi = ''.join([self.directory, '/',
-                               str(self.images_found)])
-                plt.savefig(''.join([sdi, '_sal_',
-                                     self.prob[0], self.prob[2:],
-                                     '.png']))
-                visualize.plot_occlusion(savednet, toNet, tenP)
-                plt.savefig(''.join([sdi, '_occ_',
-                                     self.prob[0], self.prob[2:],
-                                     '.png']))
-                dataset.toPIL(self.image).save(''.join([sdi, '.png']))
+                s = Image.fromarray(dataset.orderPIL(self.image))
+                s.save(''.join([self.directory, '/', str(self.images_found),
+                                '_viz', '.png']))
             self.bestImage = np.divide(self.image, 255.)
+        self.counter = np.add(self.counter, increment)
+        self.counter = np.mod(self.counter, quantization)
         self.canvas.clear()
-        self.showImage(tenP)
+        self.showImage(p)
         self.showBest()
-<<<<<<< .merge_file_Ga2pQ9
-        # saves progress every 10^4th image (see "restart" above)
-        if np.mod(self.images_shown, 10**4) == 0:
+        if np.mod(self.images_shown, 10**2) == 0:
             print(self.images_shown, 'processed... saving to visualized.file')
-=======
-        if np.mod(self.images_processed_8, 128) == 0:
-            print(self.images_processed_8*8, 'processed. Saving progress...')
->>>>>>> .merge_file_S09MX9
             f = open('visualized.file', 'wb')
             pickle.dump(self.counter, f)
             pickle.dump(self.images_found, f)
-            pickle.dump(self.images_processed_8, f)
             f.close()
 
-    # live stream of image being evaluated
     def showImage(self, p):
         with self.canvas:
             for j in range(imageSize):
@@ -218,14 +170,14 @@ class SiftWidget(Widget):
                     pixel = np.divide(self.image[:, j, i], 255.)
                     Color(*pixel)
                     Rectangle(pos=(padX + i*scale,
-                                   padY + (imageSize-j)*(scale-2)),
+                                   padY + (imageSize-j)*scale),
                               size=(scale, scale))
             Color((1, 1, 1))
-            Rectangle(pos=(padX, imageSize*scale + padY),
+            Rectangle(pos=(padX, imageSize*scale + 2*padY),
                       texture=self.currentTexture,
                       size=(200, 50))
 
-            if False:  # add pointer thing
+            if False:  # bonus graphics
                 Rectangle(pos=(padX + 5 + 1200*p,
                                imageSize*scale + 2*padY),
                           size=(10, 50))
@@ -233,7 +185,6 @@ class SiftWidget(Widget):
                                imageSize*scale + 2*padY),
                           size=(1200, 2))
 
-    # most recent candidate image found by SIFT
     def showBest(self):
         with self.canvas:
             for j in range(imageSize):
@@ -241,11 +192,11 @@ class SiftWidget(Widget):
                     pixel = self.bestImage[:, j, i]
                     Color(*pixel)
                     Rectangle(pos=(2 * padX + (i + imageSize)*scale,
-                                   padY + (imageSize-j)*(scale-2)),
+                                   padY + (imageSize-j)*scale),
                               size=(scale, scale))
             Color((1, 1, 1))
             Rectangle(pos=(2*padX + imageSize*scale,
-                           imageSize*scale + padY),
+                           imageSize*scale + 2*padY),
                       texture=self.bestTexture, size=(200, 50))
 
 
@@ -256,9 +207,5 @@ class SiftApp(App):
         Clock.schedule_interval(sift.update, 0.001)
         return sift
 
-<<<<<<< .merge_file_Ga2pQ9
-
-=======
->>>>>>> .merge_file_S09MX9
 if __name__ == "__main__":
     SiftApp().run()
