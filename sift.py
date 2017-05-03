@@ -22,21 +22,25 @@ from dataset import nextTransformAdjustable, quantization
 import os
 import datetime
 
-# all important increment; this is locked in for training experiments at 201
+# increment between transforms. Two instances of SIFT with different increments
+# will see overlapping images once every LCM(i1, i2)
 increment = 291
 
-omega = 500    # number of images to analyze in CIFAR
-imageSize = 32  # number of 'pixels' in generated images
-scale = 27      # number of screen pixels for big, small
-# scale is number of screen pixels per SIFT pixel
-padX = 60
+imageSize = 32  # images are 32p x 32p; DIMENSIONS ARE CURRENTLY FIXED
+
+# screen size settings: Scale=27, padX=60, padY=80 fills 1920x1200 monitor
+scale = 27      # number of screen pixels per image pixel
+padX = 60       # cosmetic image padding
 padY = 80
 
+# devMode provides datasets for training
+devMode = False
+if devMode:
+    (cifarMaxTransform, cifarMeanTransform, cifarMinTransform,
+     cifarStdDev) = dataset.loadCifarTransforms()
 
-(cifarMaxTransform, cifarMeanTransform, cifarMinTransform,
- cifarStdDev) = dataset.loadCifarTransforms()
-
-# call net.save_params_to('filename.pkl') to create & save file
+# call net.save_params_to('filename.pkl') to create & save
+# current neural net as a file
 savednet = NeuralNet(
     layers=[('input', layers.InputLayer),
             ('conv2d1', layers.Conv2DLayer),
@@ -86,9 +90,11 @@ savednet = NeuralNet(
     verbose=2,
     regression=True)
 
+# choose a saved neural net to evaluate images
 savednet.load_params_from('regression.net')
 
 
+# Kivy widget that displays SIFT images
 class SiftWidget(Widget):
     counter = np.array(range(1, 3072000, 1000),
                        dtype='float32').reshape((3, 32, 32), order='F')
@@ -105,6 +111,8 @@ class SiftWidget(Widget):
     texture_size = ObjectProperty()
     directory = ""
 
+    # If restart, sift will start a new image sequence from zero.
+    # Otherwise it loads progress from 'visualized.file'
     restart = False
     if not restart:
         print('loading saved state...')
@@ -112,9 +120,10 @@ class SiftWidget(Widget):
         counter = pickle.load(f)
         images_found = pickle.load(f)
         f.close()
-    
-    # save routine (optional)
-    save = False
+
+    # if save, SIFT will save a .png copy of each image it finds
+    # to: --SIFT--directory--/found_images/--start--date--/####.png
+    save = True
     if save:
         if not os.path.exists('found_images'):
             os.makedirs('found_images')
@@ -154,13 +163,15 @@ class SiftWidget(Widget):
         self.canvas.clear()
         self.showImage(p)
         self.showBest()
-        if np.mod(self.images_shown, 10**2) == 0:
+        # saves progress every 10^4th image (see "restart" above)
+        if np.mod(self.images_shown, 10**4) == 0:
             print(self.images_shown, 'processed... saving to visualized.file')
             f = open('visualized.file', 'wb')
             pickle.dump(self.counter, f)
             pickle.dump(self.images_found, f)
             f.close()
 
+    # live stream of image being evaluated
     def showImage(self, p):
         with self.canvas:
             for j in range(imageSize):
@@ -183,6 +194,7 @@ class SiftWidget(Widget):
                                imageSize*scale + 2*padY),
                           size=(1200, 2))
 
+    # most recent candidate image found by SIFT
     def showBest(self):
         with self.canvas:
             for j in range(imageSize):
@@ -204,3 +216,7 @@ class SiftApp(App):
         sift = SiftWidget()
         Clock.schedule_interval(sift.update, 0.001)
         return sift
+
+
+if __name__ == "__main__":
+    SiftApp().run()

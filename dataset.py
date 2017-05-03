@@ -1,21 +1,26 @@
-# Datasetfile contains DCT and image conversion tools and utilities to
-# load CIFAR dataset, analyze it, and create images
+# Dataset.py contains DCT and image conversion tools and utilities to
+# load CIFAR dataset, analyze it, and create images.
+# Also contains low-level image transform and retrieval tools.
 
 import numpy as np
 import pickle
 from math import cos, pi
-import matplotlib.pyplot as plt
 from PIL import Image
 
-import import_batch
+# import_batch is a SIFT toolset for loading pickled sets of images
+# useful for testing and retraining network:
+# import import_batch
 
+# optional tools for testing:
+# import matplotlib.pyplot as plt
 
+# omega is the number of samples to load or store in testing/training functions
 omega = 1000
 
 
 # makeTransforms produces statistics about an image dataset (eg CIFAR)
-# and a 4-d array of all their transforms for analysis / plotting
-# typically you can just load this pickle
+# and a 4-d array of all their transforms for analysis / plotting.
+# Once assembled, you can load this pickle instead of rebuilding
 def makeTransforms(dataset, numberOfImages=omega):
     # initialize result arrays:
     cifarMaxTransform = np.zeros((3, 32, 32), dtype='float32')
@@ -457,18 +462,30 @@ def diagonalUnfold(image, channels=1):
     return vector
 
 
-# THE ACTUAL IMAGE GENERATOR FUNCTION! #
+# SIFT IMAGE (Transform) GENERATOR FUNCTIONS! #
+
+# all of these are functional, but nextTransformNarrow is used
+# in SIFT for aesthetic reasons.
+
+
+# narrowScale determines the range of transforms created below;
+# larger values for narrowScale create more contrast-y images.
+# 1.6 seems to be about right but ultimately this is subjective.
 narrowScale = 1.6
+
+# precompute some variables to speed up math
 clow = np.subtract(cmean, np.multiply(narrowScale, cstd))
 cmult = np.divide(np.multiply(2.0*narrowScale, cstd), quantization)
 
+# determines relative values of YCrCb components in nextTransformAdjustable:
 scaler = np.array([[[1]],
                    [[1.2]],
                    [[1.2]]])
 
 
-# count neeeds to be float32 dtype or things get weird!
+# count neeeds to be float32 dtype!
 # CREATE NEXT IMAGE USING A COUNTER MATRIX
+
 # narrowScale 1.6  matches distribution of real images OK...
 def nextTransformNarrow(count):
     if count.dtype != 'float32':
