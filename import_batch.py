@@ -8,6 +8,7 @@ import dataset
 size = (32, 32)
 
 
+# getImages takes a directory and returns a stack of images
 def getImages(filepath):
     all_files = os.listdir(filepath)
     # change 1 to 2 in following line if there are non-square images:
