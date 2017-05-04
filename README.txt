@@ -12,23 +12,33 @@ Given the scale of the numbers involved, the best strategy for answering this qu
 
 SIFT is built with many pre-existing tools, which can be found in requirements.txt. It is not dependent on CUDA, but it will benefit from CUDA / GPU acceleration.
 
-INSTALLATION INSTRUCTIONS (Linux)
-1. clone SIFT2 repository from Github; cd into sift2 directory
+COMMAND LINE INSTALLATION INSTRUCTIONS for Linux 16
+(if you are using older Linux or most other OS, you will probably have to specify Python3 and PIP3. If you are using Windows I don't know what will happen.)
+
+0. Install python3, pip, git, and virtualenv globally
+
+1. Clone SIFT2 repository from Github; cd into sift2 directory
 git clone https://github.com/thesambeck/sift2
+cd sift2
 
-2. Install SIFT requirements (ideally inside virtualenv) for Python 3 using PIP:
-pip install -r requirements 
+2. Optional: Make virtualenv and activate it (this keeps SIFT dependencies separate from the rest of your system):
+virtualenv env
+env/bin/activate
 
-3. Upgrade Lasagne and Theano to newest versions (Tested with Lasagne-0.2.dev1 and Theano-0.9.0)
+2. Install SIFT requirements (inside virtualenv) for Python 3 using PIP (you may have to type pip3 here)
+pip install -r requirements.txt
+
+3. Upgrade Lasagne and Theano to newest versions (Tested with Lasagne-0.2.dev1 and Theano-0.9.0; this works as of 5/3/17):
 pip install --upgrade https://github.com/Theano/Theano/archive/master.zip
 pip install --upgrade https://github.com/Lasagne/Lasagne/archive/master.zip
 
-4. Edit parameters to your liking:
+4. Optional: Edit parameters to your liking:
 DEFINITELY CHANGE: increment - I have been running 999 as increment, so use a different number.
-You could change pretty easily: screen size, save prefs, the range of the transform generator function...
+You can change easily: screen size, save prefs, the range of the transform generator function (i.e. contrast)
 
 5. Run SIFT (visualized or not) in Python 3:
 python sift.py
+OR
 python sift-nonvisual.py
 
 
