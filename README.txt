@@ -23,7 +23,7 @@ cd sift2
 
 2. Optional: Make virtualenv and activate it (this keeps SIFT dependencies separate from the rest of your system):
 virtualenv env
-env/bin/activate
+source env/bin/activate
 
 2. Install SIFT requirements (inside virtualenv) for Python 3 using PIP (you may have to type pip3 here)
 pip install -r requirements.txt
