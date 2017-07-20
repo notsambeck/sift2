@@ -12,7 +12,7 @@ size = (32, 32)
 def getImages(filepath):
     all_files = os.listdir(filepath)
     # change 1 to 2 in following line if there are non-square images:
-    out = np.zeros((len(all_files)*1, 3, 32, 32), dtype='float32')
+    out = np.zeros((len(all_files)*2, 3, 32, 32), dtype='float32')
     count = 0
 
     def addToDataset(image):
@@ -57,14 +57,14 @@ def getImages(filepath):
 # until it has filled in the full area defined by dim.ension (size is
 # fixed at 32x32) coordinates are (x, y): (1, 1) to (dim[0], dim[1])
 # dim is max x, max y
-def tileDiagonal(image, imageSet, dim=(3, 3)):
-    tiled = np.zeros((3, dim[0]*32, dim[1]*32), dtype='float32')
+def tileDiagonal(image, imageSet, dim=(3, 3), spc=0):
+    tiled = np.zeros((3, dim[0]*(32+spc), dim[1]*(32+spc)), dtype='float32')
     tiled[:, :32, :32] = image
     pointer = [1, 2]
     mode = 'right'
     for i in range(1, dim[0]*dim[1]):
         print("pointer =", pointer, "  mode =", mode)
-        tiled = fitImage(tiled, imageSet, pointer, mode)
+        tiled = fitImage(tiled, imageSet, pointer, mode, spc)
         # if at left edge and not in bottom row, bounce to top
         if pointer[1] == 1 and pointer[0] < dim[0]:
             pointer[1] = pointer[0] + 1
@@ -84,16 +84,16 @@ def tileDiagonal(image, imageSet, dim=(3, 3)):
     return tiled
 
 
-def fitImage(tiled, imageSet, pointer, mode):
+def fitImage(tiled, imageSet, pointer, mode, spc):
     o = 2   # overlap, set at 1 or more
     oldEdgeB = tiled[:,
-                     (pointer[0]-1)*32-o:(pointer[0]-1)*32,
-                     (pointer[1]-1)*32:pointer[1]*32]
+                     (pointer[0]-1)*(32+spc)-spc-o:(pointer[0]-1)*(32+spc)-spc,
+                     (pointer[1]-1)*(32+spc):pointer[1]*(32+spc)-spc]
     # print('range - bottom edge: row: ', (pointer[0]-1)*32+31,
     #       'cols up to:', pointer[1]*32)
     oldEdgeR = tiled[:,
-                     (pointer[0]-1)*32:pointer[0]*32,
-                     (pointer[1]-1)*32-o:(pointer[1]-1)*32]
+                     (pointer[0]-1)*(32+spc):pointer[0]*(32+spc)-spc,
+                     (pointer[1]-1)*(32+spc)-spc-o:(pointer[1]-1)*(32+spc)-spc]
     # print('range - right  edge: rows up to:', pointer[0]*32,
     #       'column:', (pointer[1]-1)*32+31)
     bestScore = 10.**10
@@ -115,8 +115,8 @@ def fitImage(tiled, imageSet, pointer, mode):
             bestScore = score
             # print(score)
             candidateNumber = i  # if you want to remove from set
-    tiled[:, (pointer[0]-1)*32:pointer[0]*32,
-          (pointer[1]-1)*32:pointer[1]*32] = candidate
+    tiled[:, (pointer[0]-1)*(32+spc):pointer[0]*(32+spc)-spc,
+          (pointer[1]-1)*(32+spc):pointer[1]*(32+spc)-spc] = candidate
     return tiled
 
 
