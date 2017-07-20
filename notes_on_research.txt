@@ -1,0 +1,121 @@
+Sift Neural Network information
+
+
+9/21/16 - progress
+
+Constructed dataset using sift YCC transform generator and CIFAR-10
+dataset for real images. Have tested actual dataset with PIL:
+Image.fromarray(image_array).show()
+and it seems that things are happening the way they are suppposed to.
+
+The images are formed by first analyzing a batch of CIFAR images to
+determine range of their YCC transform coefficients. Images are then
+generated from within that range. At this time, random values that
+roughly fit the distributions (gaussian) of each transform coefficient
+independently.
+
+
+
+Have now tried to use 2-3 different learning systems with marginal
+results, but now things looks like they might work out. 
+
+The problem, specificially, is to identify which images (3072 RGB
+vectors) come from a real-world source (CIFAR) and which are generated
+(randomly or otherwise) via a YCrCb transform modeling those real
+images' distributions.
+
+Attempt 1: SVM (SVC & SVR with scikit-learn in python3) Not successful
+SVmachine could be convinced to correctly label dataset, but despite
+trying a wide array of values for gamma & C it failed to predict any
+validation set images.
+
+Even varying a single pixel's R value by +1 significantly changed the
+predicted value to nearly .5, changing just the one value by +150
+caused the prediction to revert to exactly 50%. 
+
+All external images score precisely 50% probability of coming from
+either distribution. POTENTIAL BUG THAT CAUSED THIS - training
+examples were strictly ordered (all 1, all 0) when they were used to
+train the system.
+
+Conclusions: The SVM is not learning the right kinds of features to
+differentiate between images and simulations of images.
+Abandon SVM and move into neural networks.
+
+
+
+Neural Network - feed forward with pybrain
+
+The Pybrain neural network system seems like a much likelier candidate
+for success. At this time, it has not been tested on any real images
+outside of its training set; however, it is clearly learning something
+about the images it is using.
+
+Earlier today, it acheived 80% accuracy on training set following
+around 10 epochs of training. It currently scores a majority of
+randomly generated images as random. It seems to me very likely that
+this system is capable of a precision/recall tradeoff that is
+acceptable for dramatically increasing the quality of presented images
+in SiFT.
+
+Earlier ran a test on 2000/2000 with 3072-256-8-1 network that
+achieved ca. 80% accuracy on training set in about one hour of
+training.
+
+It appears that a single hidden layer is not sufficient to find the
+kinds of features that are needed - error in a 3-layer network stayed
+notably higher after a few rounds of training than with additional
+layers. There is not an immediately perceptible change in training
+time...
+
+Optimizing the layer composition seems like a fruitful (but also
+interesting) path to take.
+
+Currently running a test with the followng parameters, results
+pending:
+
+Omega = 2000 real and 2000 generated images
+NetworK:
+3072 (input)
+256
+64
+8
+1 (output - 0-1)
+
+All parameters are defaults using build shortcut. 
+
+trainer.train() output is dropping below .105 after 10 iterations and
+appears likely to continue dropping substantially.
+
+Stats after 27 epochs of training:
+e = .090. 
+2653/4000 = 66% correct on unseen images from CIFAR
+799/1000 = 80% correct on generated images
+
+Pleased with results so far - resumed training with same 2000/2000
+sample dataset.
+
+
+I am trying to use a (Python/lasagne/nolearn) neural network semi-backward in generating images. I'm hoping there is an easy way to use the (already trained network's) loss function's gradient with respect to the images it is classifying to find local minima (i.e. the most image-y images in that region) and am not finding any information.
+
+Maybe I just don't know what this problem is called?
+
+Full backstory: I am working on an image generator, currently in Python. The goal is to find new images of interesting stuff. What it does:
+
+Loads the CIFAR-10 dataset as reference for what images look like
+Generates new 'plausible images' in the same space as JPEG-compressed versions of CIFAR (big space, but much blobbier & smaller than random pixels) and then converts them to RGB bitmaps
+Uses a nolearn/lasagne convolutional neural net to evaluate whether a 'plausible image' is more like a member of CIFAR set or more like random noise. Currently set up as two class (CIFAR vs. noise) regression.
+Spits out ~.001% of generated 'images' as being candidates for being real images (>50% chance)
+The network I'm using is based on this blog post and works pretty well: http://blog.christianperone.com/2015/08/convolutional-neural-networks-and-feature-extraction-with-python/
+
+What I want to do is take these likely candidate images, and look nearby for better, more-image-y images.
+
+It is clear that: 1. taking the candidate image and changing components slightly (in the 3072-dimensional feature vector) will change the loss function. Right now a guess-and-check BS gradient function is sounding more doable than: 2. You could do a bunch of math, find the loss function's gradient at the image (with respect to the trained net), and implement gradient descent on this, but that sounds hard and I bet someone smarter than me has already done something better.
+
+I'm hoping there is an easy way to optimize a specific image (again, for the existing network). If the network were just a 2-d array, you could 'train the image' (with a very small learning rate to look for local minima) the same way you train a network - but I don't know how one would implement that even if the net were an uncomplicated object.
+
+Any help would be appreciated! I am guessing that this problem has been solved, but I don't even know what it's called so I'm really not getting anywhere Googling it.
+
+The code is a mess, but it's on github and I will update as I make progress. Link is here more for ethics than because it is presently useful: https://github.com/thesambeck/sift
+
+Thanks! Sam

@@ -69,6 +69,7 @@ def loadCifarTransforms():
     return (cifarMaxTransform, cifarMeanTransform,
             cifarMinTransform, cifarStdDeviation)
 
+
 # loads pre-pickled dataset of images. cmax is matrix of maximum
 # values of transform coefs, etc.  used in creating images
 cmax, cmean, cmin, cstd = loadCifarTransforms()
@@ -88,7 +89,7 @@ def getStdDev(transformArray):
 # google cifar for this and cifar10 dataset
 def importCifar100():
     # cifar-100 1 file
-    fo = open('data/cifar100.pkl', 'rb')
+    fo = open('data/cifar_raw_data/cifar100.pkl', 'rb')
     u = pickle._Unpickler(fo)
     u.encoding = 'Latin1'
     cifar_data = u.load()
@@ -100,19 +101,24 @@ def importCifar100():
 
 
 # import RGB CIFAR10 batch files of 10k images
-def importCifar10():
+# return 3072 x n np.array in range 0-255
+# NEEDS TO BE SCALED to +/- 1
+def importCifar10(howmany=1):
     # cifar 10 data in batches 1-5
     cifar10 = np.zeros((50000, 3072), dtype='uint8')
-    for i in range(1, 6):
-        name = ''.join(['data/data_batch_', str(i)])
+    for i in range(1, howmany+1):
+        name = ''.join(['data/cifar_raw_data/data_batch_', str(i)])
         f = open(name, 'rb')
         u = pickle._Unpickler(f)
         u.encoding = 'Latin1'
         cifar_data = u.load()
         f.close()
         cifar10[(i-1)*10000:i*10000] = cifar_data['data']
-    print('Imported dataset. Samples:', len(cifar10), ', shape:',
-          cifar10.shape)
+    print('Imported dataset.')
+    print('Samples: {}, shape: {}, range: {} to {}.'.format(len(cifar10),
+                                                            cifar10.shape,
+                                                            cifar10.min(),
+                                                            cifar10.max()))
     return cifar10
 
 
@@ -146,6 +152,7 @@ def r2y(pixel):
     YCC = np.dot(np.divide(pixel, 256.), r2yconversion)
     return np.add(YCC, r2yaddition)
 
+
 y2rMult = np.transpose(np.array([[298.082, 0., 408.583],
                                  [298.082, -100.291, -208.120],
                                  [298.082, 516.412, 0]]))
@@ -160,7 +167,7 @@ def y2rVector(YCCpixel):
     return rgb
 
 
-# converts to 0-255 RGB pixel for Kivy display
+# converts to 0-255 RGB pixel for display
 def y2r(pixel):
     Y, Cb, Cr = np.divide(pixel, 256.)
     R = max(min(255, 298.082 * Y + 408.583 * Cr - 222.921), 0)
@@ -180,6 +187,7 @@ def dct_matrix(n):
         for col in range(n):
             d[row][col] = (2./n)**.5*cos(row*pi*(2.*col+1.)/2./n)
     return(d)
+
 
 dctMatrix = dct_matrix(32)
 bigSize = 512
@@ -265,7 +273,7 @@ def buildPrimes(start, shape=(3, 32, 32), limit=50000):
 # quantization is now a matrix (size of an image) of all unique prime
 # numbers not really a quantization matrix but does define number of
 # steps allowed for transforms. It is ordered like a real quantization
-# matrix - less steps for less significant coeffs. Start point is
+# matrix - less steps for less significant coeffs. Start point (500) is
 # arbitrary.
 quantization = buildPrimes(500)
 
@@ -432,9 +440,9 @@ def toPIL(data, scale=128):
                                            scale)))
 
 
-# DATA ANALYSIS TOOLS - NOT NECESSARILY USEFUL #
+# SOME DATA ANALYSIS TOOLS - NOT NECESSARILY USEFUL #
 
-# look at distribution of transforms
+# look at distribution of transforms requires matplotlib import
 def plotHistogram(data, x_range=1, y_range=1, color_range=1):
     # show histograms of transform data (columns in 4th dimension)
     for i in range(x_range):
@@ -446,7 +454,7 @@ def plotHistogram(data, x_range=1, y_range=1, color_range=1):
     plt.show()
 
 
-# take a matrix and list it in order of significance of coefs.
+# take a matrix and list it in ~order of significance of coefs.
 def diagonalUnfold(image, channels=1):
     vector = np.zeros((channels, 1024))
     for i in range(channels):
@@ -464,35 +472,29 @@ def diagonalUnfold(image, channels=1):
 
 # SIFT IMAGE (Transform) GENERATOR FUNCTIONS! #
 
-# all of these are functional, but nextTransformNarrow is used
+# all of these are functional, but nextTransformAdjustable is used
 # in SIFT for aesthetic reasons.
 
 
 # narrowScale determines the range of transforms created below;
 # larger values for narrowScale create more contrast-y images.
-# 1.6 seems to be about right but ultimately this is subjective.
+# 1.6 seems to be about right but this is totally subjective.
 narrowScale = 1.6
-
-# precompute some variables to speed up math
-clow = np.subtract(cmean, np.multiply(narrowScale, cstd))
-cmult = np.divide(np.multiply(2.0*narrowScale, cstd), quantization)
 
 # determines relative values of YCrCb components in nextTransformAdjustable:
 scaler = np.array([[[1]],
                    [[1.2]],
                    [[1.2]]])
 
-
-# count neeeds to be float32 dtype!
-# CREATE NEXT IMAGE USING A COUNTER MATRIX
-
-# narrowScale 1.6  matches distribution of real images OK...
-def nextTransformNarrow(count):
-    if count.dtype != 'float32':
-        raise ValueError(count.dtype)
-    return np.add(clow, np.multiply(count, cmult))
+# precompute some variables to speed up math:
+# clow is the mean of actual CIFAR image transforms less std. dev * narrowScale
+# (cstd amd cmean are preloaded from pickle init.data)
+clow = np.subtract(cmean, np.multiply(narrowScale, cstd))
+# cmult is the range of transforms, scaled by number of steps i.e. quantization
+cmult = np.divide(np.multiply(2.0*narrowScale, cstd), quantization)
 
 
+# nextTransformAdjustable is current version
 def nextTransformAdjustable(count):
     if count.dtype != 'float32':
         raise ValueError(count.dtype)
@@ -502,8 +504,40 @@ def nextTransformAdjustable(count):
     return new
 
 
+# junk show #
+
+
+# convert an image to ycc
+# transform ycc to tr;
+# clip transform coeffs according to nextTransformAdjustable;
+# transform back to ycc
+# convert back to RGB
+# show
+def trinv(dataset, i=0):
+    img255 = getImage255(i, dataset)
+
+    show = np.divide(np.subtract(img255, 128), 128)  # +-1
+    toPIL(show).show()  # show image +/- 1
+
+    ycc255 = imY2R(img255)
+    img255 = imR2Y(ycc255)
+    show = np.divide(np.subtract(img255, 128), 128)  # +-1
+    toPIL(show).show()  # show afer transform
+
+    tr = dct(ycc255)
+    r = np.multiply(3.2, cstd)
+    high = np.add(clow, r)
+    capped = np.maximum(clow, tr)
+    capped = np.minimum(high, capped)
+    ycc = idct(capped)
+    im255 = imY2R(ycc)
+    img = np.divide(np.subtract(im255, 128), 128)
+    toPIL(img).show()
+    return img
+
+
 # create next image in full range - min to max.
-# leads to a lot of blacks and whites, narrow is better
+# leads to a lot of blacks and whites, narrow is subjectively better
 def nextTransformWide(count, quantization=quantization):
     if count.dtype != 'float32':
         raise ValueError(count.dtype)
@@ -512,6 +546,15 @@ def nextTransformWide(count, quantization=quantization):
                                                    quantization),
                                          count))
     return transform
+
+
+# count neeeds to be float32 dtype!
+# CREATE NEXT IMAGE USING A COUNTER MATRIX
+# narrowScale 1.6  matches distribution of real images OK...
+def nextTransformNarrow(count):
+    if count.dtype != 'float32':
+        raise ValueError(count.dtype)
+    return np.add(clow, np.multiply(count, cmult))
 
 
 # vec2int converts vector NN output to an integer
@@ -524,3 +567,12 @@ def vec2int(vector):
             biggest = vector[i]
             out = i
     return out
+
+
+if __name__ == '__main__':
+    print('import cifar as c')
+    c = importCifar10()
+    print('x = trinv(c, i)')
+    x = []
+    for i in range(1):
+        x.append(trinv(c, i))
