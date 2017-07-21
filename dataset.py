@@ -479,7 +479,7 @@ def diagonalUnfold(image, channels=1):
 # narrowScale determines the range of transforms created below;
 # larger values for narrowScale create more contrast-y images.
 # 1.6 seems to be about right but this is totally subjective.
-narrowScale = 1.6
+narrowScale = 1.7
 
 # determines relative values of YCrCb components in nextTransformAdjustable:
 scaler = np.array([[[1]],
@@ -534,27 +534,6 @@ def trinv(dataset, i=0):
     img = np.divide(np.subtract(im255, 128), 128)
     toPIL(img).show()
     return img
-
-
-# create next image in full range - min to max.
-# leads to a lot of blacks and whites, narrow is subjectively better
-def nextTransformWide(count, quantization=quantization):
-    if count.dtype != 'float32':
-        raise ValueError(count.dtype)
-    transform = np.add(cmin, np.multiply(np.divide(np.subtract(cmax,
-                                                               cmin),
-                                                   quantization),
-                                         count))
-    return transform
-
-
-# count neeeds to be float32 dtype!
-# CREATE NEXT IMAGE USING A COUNTER MATRIX
-# narrowScale 1.6  matches distribution of real images OK...
-def nextTransformNarrow(count):
-    if count.dtype != 'float32':
-        raise ValueError(count.dtype)
-    return np.add(clow, np.multiply(count, cmult))
 
 
 # vec2int converts vector NN output to an integer

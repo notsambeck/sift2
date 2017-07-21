@@ -216,5 +216,6 @@ class SiftApp(App):
         Clock.schedule_interval(sift.update, 0.001)
         return sift
 
+
 if __name__ == "__main__":
     SiftApp().run()

@@ -87,7 +87,7 @@ net = NeuralNet(
     regression=False)
 
 # for automated load of net CURRENT WORKING NET abstract_V2.net
-net.load_params_from('abstract_v2.net')
+net.load_params_from('160720_classification.nn')
 
 
 # do you want to train the network more? build a dataset & load here:
@@ -97,6 +97,8 @@ net.load_params_from('abstract_v2.net')
 
 # how many images to store as array in RAM
 howManyToSave = 100000
+# saveEvery is how often to write progress
+saveEvery = 10**5
 # images are saved to .png by default, but also here
 found_images = np.zeros((howManyToSave, 3, 32, 32), 'uint8')
 
@@ -128,14 +130,19 @@ def Sift(increment=999, omega=10**10, classes=4, restart=False, saveAll=False):
     print('saving to', directory)
 
     for i in range(1, omega):
-        # save progress every 10^5th
-        if not restart:
-            if np.mod(i, 10**5) == 0:
-                print(i, 'processed... saving progress to save.file')
-                f = open('save.file', 'wb')
-                pickle.dump(counter, f)
-                pickle.dump(images_found, f)
-                f.close()
+        progress = (i % saveEvery)*80 // saveEvery
+        print('\r|{}{}| % of {}'.format('!'*progress,
+                                        '_'*(80-progress),
+                                        saveEvery),
+              end='\r')
+
+        # save progress
+        if np.mod(i, saveEvery) == 0:
+            print('\n', i, 'processed... saving progress to save.file')
+            f = open('save.file', 'wb')
+            pickle.dump(counter, f)
+            pickle.dump(images_found, f)
+            f.close()
 
         # create transform; turn into image and send to neural net
         t = dataset.nextTransformAdjustable(counter)
@@ -236,6 +243,7 @@ def check_accuracy_vector(x, y, save=False):
     print('Of', omega, 'examples:')
     for thing in [t, fp, fn]:
         print(thing[0], ':', thing[1], '=', str(thing[1]/omega*100), '%')
+
 
 '''
 if __name__ == '__main__':
