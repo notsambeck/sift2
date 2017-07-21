@@ -22,6 +22,31 @@ import os
 import datetime
 import pickle
 
+# dataset is a sift module that imports CIFAR and provides
+# image transform functions and access to saved datasets/etc.
+import dataset
+
+twitter_mode = True
+if twitter_mode:
+    from google.cloud import vision
+    vision_client = vision.Client()
+
+    import tweepy
+    from secret import consumerSecret, consumerKey
+    from secret import accessToken, accessTokenSecret
+    # secret.py is in .gitignore, stores twitter login keys as str
+    auth = tweepy.OAuthHandler(consumerKey, consumerSecret)
+    auth.set_access_token(accessToken, accessTokenSecret)
+
+    try:
+        api = tweepy.API(auth)
+        print('twitter connected')
+        # print(api.me())
+    except:
+        print('twitter connect failed')
+        twitter_mode = False
+
+
 # optional functions for network visualization, debug
 '''
 import import_batch
@@ -32,9 +57,6 @@ from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
 '''
 
-# dataset is a sift module that imports CIFAR and provides
-# image transform functions and access to saved datasets/etc.
-import dataset
 
 # call net.save_params_to('filename.pkl') to create & save file
 net = NeuralNet(
@@ -87,8 +109,8 @@ net = NeuralNet(
     regression=False)
 
 # for automated load of net CURRENT WORKING NET abstract_V2.net
-net.load_params_from('160720_classification.nn')
-
+# net.load_params_from('170720_classification.nn')
+net.load_params_from('abstract_v2.net')
 
 # do you want to train the network more? build a dataset & load here:
 # import pickle
@@ -130,12 +152,6 @@ def Sift(increment=999, omega=10**10, classes=4, restart=False, saveAll=False):
     print('saving to', directory)
 
     for i in range(1, omega):
-        progress = (i % saveEvery)*80 // saveEvery
-        print('\r|{}{}| % of {}'.format('!'*progress,
-                                        '_'*(80-progress),
-                                        saveEvery),
-              end='\r')
-
         # save progress
         if np.mod(i, saveEvery) == 0:
             print('\n', i, 'processed... saving progress to save.file')
@@ -143,6 +159,13 @@ def Sift(increment=999, omega=10**10, classes=4, restart=False, saveAll=False):
             pickle.dump(counter, f)
             pickle.dump(images_found, f)
             f.close()
+
+        if i % (saveEvery // 80) == 1:
+            progress = (i % saveEvery)*80 // saveEvery
+            print('\r|{}{}| % of {}'.format('!'*progress,
+                                            '_'*(80-progress),
+                                            saveEvery),
+                  end='\r')
 
         # create transform; turn into image and send to neural net
         t = dataset.nextTransformAdjustable(counter)
@@ -154,13 +177,36 @@ def Sift(increment=999, omega=10**10, classes=4, restart=False, saveAll=False):
         if p >= 1:
             print('Class', p, 'image found:', images_found, 'of', i)
             s = Image.fromarray(dataset.orderPIL(image))
-            s.save(''.join([directory, '/',
-                            str(images_found),
-                            '_class-', str(p),
-                            '.png']))
+            saveName = ''.join([str(images_found),
+                                '_class-',
+                                str(p),
+                                '.png'])
+            s.save(''.join([directory, '/', saveName]))
             if images_found < howManyToSave:
                 found_images[images_found] = image
             images_found += 1
+
+            # tweet it
+            if twitter_mode:
+                large = s.resize((640, 640))
+                large.save('twitter.png')
+                with open('twitter.png', 'rb') as twi:
+                    content = twi.read()
+                try:
+                    goog = vision_client.image(content=content)
+                    labels = goog.detect_labels()
+                    # print(labels)
+                    tweet = '''Image located! {}
+                    #{} #{} #{} #{} #{}'''.format(saveName,
+                                                  labels[0].description,
+                                                  labels[1].description,
+                                                  labels[2].description,
+                                                  labels[3].description,
+                                                  labels[4].description)
+                except:
+                    print('Google api failed')
+                    tweet = '#definitely #found an #image. #SIFT'
+                api.update_with_media('twitter.png', tweet)
 
         if saveAll:
             s = Image.fromarray(dataset.orderPIL(image))

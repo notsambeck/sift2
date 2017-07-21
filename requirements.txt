@@ -2,6 +2,7 @@ appdirs==1.4.3
 cycler==0.10.0
 Cython==0.25.2
 gdbn==0.1
+google-cloud-vision
 gnumpy==0.2
 joblib==0.11
 Kivy==1.9.1
@@ -15,9 +16,10 @@ pygame==1.9.3
 pyparsing==2.2.0
 python-dateutil==2.6.0
 pytz==2017.2
-requests==2.13.0
+requests
 requests_oauthlib
 scikit-learn==0.18.1
 six==1.10.0
 tabulate==0.7.7
 Theano==0.9.0
+tweepy

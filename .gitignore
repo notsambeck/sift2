@@ -3,3 +3,5 @@
 *.nn
 *~
 */
+secret.py
+google.json
