@@ -109,8 +109,8 @@ net = NeuralNet(
     regression=False)
 
 # for automated load of net CURRENT WORKING NET abstract_V2.net
-# net.load_params_from('170720_classification.nn')
-net.load_params_from('abstract_v2.net')
+net.load_params_from('170720_classification.nn')
+# net.load_params_from('abstract_v2.net')
 
 # do you want to train the network more? build a dataset & load here:
 # import pickle
@@ -188,25 +188,31 @@ def Sift(increment=999, omega=10**10, classes=4, restart=False, saveAll=False):
 
             # tweet it
             if twitter_mode:
-                large = s.resize((640, 640))
+                large = s.resize((512, 512))
                 large.save('twitter.png')
-                with open('twitter.png', 'rb') as twi:
+                with open(''.join([directory, '/', saveName]), 'rb') as twi:
                     content = twi.read()
                 try:
+                    bad = ['computer wallpaper',
+                           'pattern',
+                           'texture',
+                           'font',
+                           'text']
                     goog = vision_client.image(content=content)
                     labels = goog.detect_labels()
+                    ds = ['#'+label.description.replace(' ', '')
+                          for label in labels if label not in bad]
                     # print(labels)
-                    tweet = '''Image located! {}
-                    #{} #{} #{} #{} #{}'''.format(saveName,
-                                                  labels[0].description,
-                                                  labels[1].description,
-                                                  labels[2].description,
-                                                  labels[3].description,
-                                                  labels[4].description)
+                    tweet = '''IMAGE LOCATED. #{}
+                    {}'''.format(str(images_found), ' '.join(ds))
                 except:
                     print('Google api failed')
-                    tweet = '#definitely #found an #image. #SIFT'
-                api.update_with_media('twitter.png', tweet)
+                    tweet = '#DEFINITELY #FOUND #IMAGE. #SIFT.'
+
+                try:
+                    api.update_with_media('twitter.png', tweet)
+                except:
+                    print('Tweet failed')
 
         if saveAll:
             s = Image.fromarray(dataset.orderPIL(image))
