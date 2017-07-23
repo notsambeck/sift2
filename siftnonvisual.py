@@ -162,9 +162,9 @@ def Sift(increment=999, omega=10**10, classes=4, restart=False, saveAll=False):
 
         if i % (saveEvery // 80) == 1:
             progress = (i % saveEvery)*80 // saveEvery
-            print('\r|{}{}| % of {}'.format('!'*progress,
-                                            '_'*(80-progress),
-                                            saveEvery),
+            print('|{}{}| % of {}'.format('!'*progress,
+                                          '_'*(80-progress),
+                                          saveEvery),
                   end='\r')
 
         # create transform; turn into image and send to neural net
@@ -204,10 +204,12 @@ def Sift(increment=999, omega=10**10, classes=4, restart=False, saveAll=False):
                           for label in labels if label not in bad]
                     # print(labels)
                     tweet = '''IMAGE LOCATED. #{}
-                    {}'''.format(str(images_found), ' '.join(ds))
+{}'''.format(str(images_found), ' '.join(ds))
+                    if len(tweet) > 125:
+                        tweet = tweet[:105]
                 except:
                     print('Google api failed')
-                    tweet = '#DEFINITELY #FOUND #IMAGE. #SIFT.'
+                    tweet = '#DEFINITE #LOCATE #IMAGE. #SIFT.'
 
                 try:
                     api.update_with_media('twitter.png', tweet)
@@ -297,12 +299,8 @@ def check_accuracy_vector(x, y, save=False):
         print(thing[0], ':', thing[1], '=', str(thing[1]/omega*100), '%')
 
 
-'''
 if __name__ == '__main__':
     print()
-    print('SIFT non-visual is loaded. For visuals, run python sift.py.')
-    print('To start, type:')
-    print('Sift()')
-    print('with optional parameter increment=999 by default')
+    print('SIFTnonvisual loaded. Tweeting. For visuals, run python sift.py.')
     print()
-'''
+    Sift()
