@@ -121,6 +121,7 @@ net.load_params_from('170720_classification.nn')
 howManyToSave = 100000
 # saveEvery is how often to write progress
 saveEvery = 10**5
+batch = 1000
 # images are saved to .png by default, but also here
 found_images = np.zeros((howManyToSave, 3, 32, 32), 'uint8')
 
@@ -151,77 +152,79 @@ def Sift(increment=999, omega=10**10, classes=4, restart=False, saveAll=False):
         os.makedirs(directory)
     print('saving to', directory)
 
-    for i in range(1, omega):
+    for i in range(1, omega//batch):  # run omega/batch batches
         # save progress
-        if np.mod(i, saveEvery) == 0:
-            print('\n', i, 'processed... saving progress to save.file')
+        if np.mod(i, saveEvery//batch) == 0:
+            print('\n', i*batch, 'processed... saving progress to save.file')
             f = open('save.file', 'wb')
             pickle.dump(counter, f)
             pickle.dump(images_found, f)
             f.close()
 
-        if i % (saveEvery // 80) == 1:
-            progress = (i % saveEvery)*80 // saveEvery
+        if i % (saveEvery // batch // 50) == 1:
+            progress = i % (saveEvery // batch)*50 // (saveEvery // batch)
             print('|{}{}| % of {}'.format('!'*progress,
-                                          '_'*(80-progress),
+                                          '_'*(50-progress),
                                           saveEvery),
                   end='\r')
 
-        # create transform; turn into image and send to neural net
-        t = dataset.nextTransformAdjustable(counter)
-        image = dataset.imY2R(dataset.idct(t))
-        toNet = np.zeros((1, 3, 32, 32), dtype='float32')
-        toNet[0] = np.divide(np.subtract(image, 128.), 128.)
-        p = net.predict(toNet)[0]
-        counter = np.mod(np.add(counter, increment), dataset.quantization)
-        if p >= 1:
-            print('Class', p, 'image found:', images_found, 'of', i)
-            s = Image.fromarray(dataset.orderPIL(image))
-            saveName = ''.join([str(images_found),
-                                '_class-',
-                                str(p),
-                                '.png'])
-            s.save(''.join([directory, '/', saveName]))
-            if images_found < howManyToSave:
-                found_images[images_found] = image
-            images_found += 1
+        # create transforms; save batches of images as image and net obj.
+        toNet = np.zeros((batch, 3, 32, 32), dtype='float32')
+        images = np.zeros((batch, 3, 32, 32), dtype='float32')
+        for im in range(batch):
+            t = dataset.nextTransformAdjustable(counter)
+            images[im] = dataset.imY2R(dataset.idct(t))
+            toNet[im] = np.divide(np.subtract(images[im], 128.), 128.)
+            counter = np.mod(np.add(counter, increment), dataset.quantization)
 
-            # tweet it
-            if twitter_mode:
-                large = s.resize((512, 512))
-                large.save('twitter.png')
-                with open(''.join([directory, '/', saveName]), 'rb') as twi:
-                    content = twi.read()
-                try:
-                    bad = ['computer wallpaper',
-                           'pattern',
-                           'texture',
-                           'font',
-                           'text']
-                    goog = vision_client.image(content=content)
-                    labels = goog.detect_labels()
-                    ds = ['#'+label.description.replace(' ', '')
-                          for label in labels if label not in bad]
-                    # print(labels)
-                    tweet = '''IMAGE LOCATED. #{}
+        p = net.predict(toNet)
+        for im in range(batch):
+            if p[im] >= 1:
+                print('Class', p[im], 'image found:', images_found)
+                s = Image.fromarray(dataset.orderPIL(images[im]))
+                saveName = ''.join([str(images_found),
+                                    '_class-',
+                                    str(p[im]),
+                                    '.png'])
+                s.save(''.join([directory, '/', saveName]))
+                images_found += 1
+
+                # tweet it
+                if twitter_mode:
+                    large = s.resize((512, 512))
+                    large.save('twitter.png')
+                    with open(''.join([directory, '/', saveName]), 'rb') as tw:
+                        content = tw.read()
+                        try:
+                            bad = ['computer wallpaper',
+                                   'pattern',
+                                   'texture',
+                                   'font',
+                                   'text',
+                                   'line']
+                            goog = vision_client.image(content=content)
+                            labels = goog.detect_labels()
+                            ds = ['#'+label.description.replace(' ', '')
+                                  for label in labels if label.description not in bad]
+                            tweet = '''IMAGE LOCATED. #{}
 {}'''.format(str(images_found), ' '.join(ds))
-                    if len(tweet) > 125:
-                        tweet = tweet[:105]
-                except:
-                    print('Google api failed')
-                    tweet = '#DEFINITE #LOCATE #IMAGE. #SIFT.'
+                            if len(tweet) > 125:
+                                tweet = tweet[:105]
+                        except:
+                            print('Google api failed')
+                            tweet = '#DEFINITE #LOCATE #IMAGE. #SIFT.'
 
-                try:
-                    api.update_with_media('twitter.png', tweet)
-                except:
-                    print('Tweet failed')
+                    try:
+                        api.update_with_media('twitter.png', tweet)
+                    except:
+                        print('Tweet failed')
 
-        if saveAll:
-            s = Image.fromarray(dataset.orderPIL(image))
-            s.save(''.join([directory, '/',
-                            str(images_saved),
-                            '.png']))
-            images_saved += 1
+            if saveAll:
+                s = Image.fromarray(dataset.orderPIL(images[im]))
+                s.save(''.join([directory, '/',
+                                str(images_saved),
+                                '.png']))
+                images_saved += 1
 
     print('Sifted through', omega, 'images and saved', images_found)
 
@@ -301,6 +304,6 @@ def check_accuracy_vector(x, y, save=False):
 
 if __name__ == '__main__':
     print()
-    print('SIFTnonvisual loaded. Tweeting. For visuals, run python sift.py.')
+    print('SIFTnonvisual loaded. Twitter={}. For visuals, run sift.py.'.format(twitter_mode))
     print()
     Sift()
