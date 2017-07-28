@@ -4,12 +4,26 @@
 
 import numpy as np
 import pickle
-from math import cos, pi
 from PIL import Image
+from scipy.fftpack import dct as scidct
 
 # import_batch is a SIFT toolset for loading pickled sets of images
 # useful for testing and retraining network:
 # import import_batch
+# from math import cos, pi
+
+
+def idct(x):
+    return scidct(x, type=3, norm='ortho')
+
+
+def dct(x):
+    return scidct(x, type=2, norm='ortho')
+
+
+def idct_expand(x):
+    return scidct(x, type=3, n=128, norm='ortho')
+
 
 # optional tools for testing:
 # import matplotlib.pyplot as plt
@@ -120,107 +134,6 @@ def importCifar10(howmany=1):
                                                             cifar10.min(),
                                                             cifar10.max()))
     return cifar10
-
-
-# coverts an image from RGB to YCC colorspace
-def imR2Y(image):
-    out = np.zeros((3, 32, 32), dtype='float32')
-    for row in range(32):
-        for col in range(32):
-            out[:, row, col] = r2y(image[:, row, col])
-    return out
-
-
-# coverts an image from YCC to RGB colorspace 0-255
-def imY2R(image):
-    out = np.zeros(image.shape, dtype='float32')
-    for row in range(image.shape[-1]):
-        for col in range(image.shape[-1]):
-            out[:, row, col] = y2rVector(image[:, row, col])
-    return out
-
-
-# matrices for colorspace conversion #
-r2yconversion = np.transpose(np.array([[65.738, 129.057, 25.064],
-                                       [-37.945, -74.494, 112.439],
-                                       [112.439, -94.154, -18.285]]))
-r2yaddition = np.array([16., 128., 128.])
-
-
-# converts a pixel from RGB to YCbCr colorspace using above matrices #
-def r2y(pixel):
-    YCC = np.dot(np.divide(pixel, 256.), r2yconversion)
-    return np.add(YCC, r2yaddition)
-
-
-y2rMult = np.transpose(np.array([[298.082, 0., 408.583],
-                                 [298.082, -100.291, -208.120],
-                                 [298.082, 516.412, 0]]))
-y2rAdd = np.array([-222.921, 135.576, -276.836])
-
-
-# y2r vector implements same conversion as below but faster
-# leaving old version as a reference
-def y2rVector(YCCpixel):
-    rgb = np.add(np.dot(np.divide(YCCpixel, 256.), y2rMult), y2rAdd)
-    np.clip(rgb, 0, 255, out=rgb)
-    return rgb
-
-
-# converts to 0-255 RGB pixel for display
-def y2r(pixel):
-    Y, Cb, Cr = np.divide(pixel, 256.)
-    R = max(min(255, 298.082 * Y + 408.583 * Cr - 222.921), 0)
-    G = max(min(255, 298.082 * Y - 100.291 * Cb - 208.120 * Cr + 135.576), 0)
-    B = max(min(255, 298.082 * Y + 516.412 * Cb - 276.836), 0)
-    return np.array([R, G, B])
-
-
-# DCT TOOLS SECTION #
-
-
-# create DCT matrix for n x n image
-def dct_matrix(n):
-    d = np.ones((n, n), dtype='float32')
-    d[0, :] = np.multiply(d[0, :], 1./(n**.5))
-    for row in range(1, n):
-        for col in range(n):
-            d[row][col] = (2./n)**.5*cos(row*pi*(2.*col+1.)/2./n)
-    return(d)
-
-
-dctMatrix = dct_matrix(32)
-bigSize = 512
-dctMatrixBig = dct_matrix(bigSize)
-
-
-# DCTII creates YCC transform values from YCC pixel values
-def dct(img):
-    transform = np.ndarray(img.shape, dtype='float32')
-    for i in range(img.shape[0]):
-        # print img.shape, dctMatrix.shape, i
-        transform[i] = np.dot(np.dot(dctMatrix, img[i]),
-                              np.transpose(dctMatrix))
-    return transform
-
-
-# iDCT(DCT III) creates YCC pixel values from YCC transform coefficients
-def idct(trans):
-    img = np.ndarray(trans.shape, dtype='float32')
-    for i in range(trans.shape[0]):
-        img[i] = np.dot(np.dot(np.transpose(dctMatrix), trans[i]),
-                        dctMatrix)
-    return img
-
-
-def idctBig(trans):
-    bigtrans = np.zeros((3, bigSize, bigSize), dtype=trans.dtype)
-    bigtrans[:, :32, :32] = trans
-    img = np.ndarray((3, bigSize, bigSize), dtype='float32')
-    for i in range(3):
-        img[i] = np.dot(np.dot(np.transpose(dctMatrixBig), bigtrans[i]),
-                        dctMatrixBig)
-    return img
 
 
 # chop is an ultra-shitty compression scheme that works well
@@ -425,7 +338,7 @@ def getImageYCC(n, dataset):
 
 
 # reorder an 0-255 (3, x, x) image to (x, x, 3) for PIL
-def orderPIL(image):
+def to_pil(image):
     out = np.zeros((image.shape[1], image.shape[2], 3),
                    dtype='uint8')
     for i in range(3):
@@ -433,9 +346,17 @@ def orderPIL(image):
     return out
 
 
+def from_pil(image):
+    # reorder pil as nparray to 3, 32, 32 array for NN, etc.
+    out = np.zeros((3, 32, 32), dtype='float32')
+    for i in range(3):
+        out[i] = image[:, :, i]
+    return out
+
+
 # convert from neural net data [(3,32,32) RGB +/- 1] to PIL image
 # call only on NN data, not images
-def toPIL(data, scale=128):
+def net_to_PIL(data, scale=128):
     return Image.fromarray(orderPIL(np.add(np.multiply(data, scale),
                                            scale)))
 
@@ -514,26 +435,44 @@ def nextTransformAdjustable(count):
 # convert back to RGB
 # show
 def trinv(dataset, i=0):
-    img255 = getImage255(i, dataset)
+    img_in = getImage255(i, dataset)  # (3, 32, 32) np.ndarray uint8 0-255
 
-    show = np.divide(np.subtract(img255, 128), 128)  # +-1
-    toPIL(show).show()  # show image +/- 1
+    p1 = to_pil(img_in)
+    print('\n p1 (rgb input)', p1.shape)
+    print(p1)
+    img1 = Image.fromarray(p1)
+    img1.show()
 
-    ycc255 = imY2R(img255)
-    img255 = imR2Y(ycc255)
-    show = np.divide(np.subtract(img255, 128), 128)  # +-1
-    toPIL(show).show()  # show afer transform
+    # ycc255 = imY2R(img_in)
+    ycc = img1.convert('YCbCr')
+    # ycc.show()
+    # transformed_back = ycc.convert('RGB')
+    # transformed_back.show()
 
-    tr = dct(ycc255)
-    r = np.multiply(3.2, cstd)
-    high = np.add(clow, r)
-    capped = np.maximum(clow, tr)
-    capped = np.minimum(high, capped)
-    ycc = idct(capped)
-    im255 = imY2R(ycc)
-    img = np.divide(np.subtract(im255, 128), 128)
-    toPIL(img).show()
-    return img
+    yccarr = from_pil(np.array(ycc))
+    print('\n yccarr', yccarr.shape, type(yccarr))
+    print(yccarr)
+    tr = dct(yccarr)
+    print('\n transform', tr.shape)
+    print(tr)
+    # np.clip(tr, clow, chigh)
+
+    newycc = to_pil(idct(tr))
+    print('\n newycc', newycc.shape, type(newycc))
+    print(newycc)
+
+    largeycc = to_pil(idct_expand(tr))
+    Image.fromarray(largeycc).show()
+
+    # print('\n newycc == yccarr ?= {}'.format(np.round(newycc) == yccarr))
+
+    img_f = Image.fromarray(newycc, 'YCbCr')
+    img_f.show()
+
+    img_out = img_f.convert('RGB')
+    array_out = from_pil(np.array(img_out))
+
+    return img_in, array_out
 
 
 # vec2int converts vector NN output to an integer
