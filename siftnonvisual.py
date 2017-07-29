@@ -26,7 +26,7 @@ import pickle
 # image transform functions and access to saved datasets/etc.
 import dataset
 
-twitter_mode = True
+twitter_mode = False
 if twitter_mode:
     from google.cloud import vision
     vision_client = vision.Client()
@@ -171,9 +171,10 @@ def Sift(increment=999, omega=10**10, classes=4, restart=False, saveAll=False):
         # create transforms; save batches of images as image and net obj.
         toNet = np.zeros((batch, 3, 32, 32), dtype='float32')
         images = np.zeros((batch, 3, 32, 32), dtype='float32')
+        ts = np.zeros((batch, 3, 32, 32), dtype='float32')
         for im in range(batch):
-            t = dataset.nextTransformAdjustable(counter)
-            images[im] = dataset.imY2R(dataset.idct(t))
+            ts[im] = dataset.nextTransformAdjustable(counter)
+            images[im] = dataset.arr_y2r(dataset.idct(ts[im]))
             toNet[im] = np.divide(np.subtract(images[im], 128.), 128.)
             counter = np.mod(np.add(counter, increment), dataset.quantization)
 
@@ -181,7 +182,8 @@ def Sift(increment=999, omega=10**10, classes=4, restart=False, saveAll=False):
         for im in range(batch):
             if p[im] >= 1:
                 print('Class', p[im], 'image found:', images_found)
-                s = Image.fromarray(dataset.orderPIL(images[im]))
+                # s = Image.fromarray(dataset.orderPIL(images[im]))
+                s = dataset.make_pil(images[im], output_format='RGB')
                 saveName = ''.join([str(images_found),
                                     '_class-',
                                     str(p[im]),
@@ -189,10 +191,14 @@ def Sift(increment=999, omega=10**10, classes=4, restart=False, saveAll=False):
                 s.save(''.join([directory, '/', saveName]))
                 images_found += 1
 
+                large = np.zeros((3, 512, 512))
+                large[:, :32, :32] = ts[im]
+                large = dataset.idct_expand(large)
+                large_image = dataset.make_pil(large, output_format='RGB')
+                large_image.save('twitter.png')
+
                 # tweet it
                 if twitter_mode:
-                    large = s.resize((512, 512))
-                    large.save('twitter.png')
                     with open(''.join([directory, '/', saveName]), 'rb') as tw:
                         content = tw.read()
                         try:

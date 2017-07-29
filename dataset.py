@@ -22,7 +22,7 @@ def dct(x):
 
 
 def idct_expand(x):
-    return scidct(x, type=3, n=128, norm='ortho')
+    return scidct(x, type=3, norm=None, overwrite_x=True)
 
 
 # optional tools for testing:
@@ -35,11 +35,11 @@ omega = 1000
 # makeTransforms produces statistics about an image dataset (eg CIFAR)
 # and a 4-d array of all their transforms for analysis / plotting.
 # Once assembled, you can load this pickle instead of rebuilding
-def makeTransforms(dataset, numberOfImages=omega):
+def makeTransforms(data, numberOfImages=omega):
     # initialize result arrays:
     cifarMaxTransform = np.zeros((3, 32, 32), dtype='float32')
     cifarMinTransform = np.zeros((3, 32, 32), dtype='float32')
-    cifarMinTransform = dct(getImageYCC(0, dataset))
+    cifarMinTransform = np.zeros((3, 32, 32), dtype='float32')
     total = np.zeros((3, 32, 32), dtype='float32')
 
     # format: RGB transforms stacked numberOfImages deep
@@ -48,45 +48,46 @@ def makeTransforms(dataset, numberOfImages=omega):
 
     # loop through CIFAR images
     for i in range(numberOfImages):
-        transform = dct(getImageYCC(i, dataset))
+        rgb = get_rgb_array(i, data)
+        transform = dct(arr_r2y(rgb))
         cifarMaxTransform = np.maximum(cifarMaxTransform, transform)
         cifarMinTransform = np.minimum(cifarMinTransform, transform)
         total = np.add(total, transform)
         cifarTransforms[i] = transform
         pct = i/numberOfImages*100
         if round(pct) == pct:
-            print(''.join([str(pct), '%...']))
+            print('\r {} %'.format(pct))
     cifarMeanTransform = np.divide(total, numberOfImages)
-    out = open('init_data', 'wb')
-    cstd = getStdDev(cifarTransforms)
+    with open('init_data', 'wb') as out:
+        cstd = getStdDev(cifarTransforms)
 
-    # pickle.dump(cifarTransforms, out)    # if you want to save all data
-    pickle.dump(cifarMaxTransform, out)
-    pickle.dump(cifarMinTransform, out)
-    pickle.dump(cifarMeanTransform, out)
-    pickle.dump(cstd, out)
-    out.close()
+        pickle.dump(cifarTransforms, out)    # if you want to save all data
+        pickle.dump(cifarMaxTransform, out)
+        pickle.dump(cifarMinTransform, out)
+        pickle.dump(cifarMeanTransform, out)
+        pickle.dump(cstd, out)
 
 
 # LOAD CIFAR TRANSFORMS from pickle made in makeTransforms:
 # Max, Mean, Min, Distribution = loadCifarTransforms() This should be
 # the only function needed in main app once the pickle is constructed.
-def loadCifarTransforms():
+def loadCifarTransforms(filename='init_data'):
     # cifar-100 filename including transforms: cifarTransforms.pkl
-    pkl_file = open('init_data', 'rb')
-    # cifarTransforms = pickle.load(pkl_file)   # again, if you saved data
+    pkl_file = open(filename, 'rb')
+    cifarTransforms = pickle.load(pkl_file)   # again, if you saved data
     cifarMaxTransform = pickle.load(pkl_file)
     cifarMinTransform = pickle.load(pkl_file)
     cifarMeanTransform = pickle.load(pkl_file)
     cifarStdDeviation = pickle.load(pkl_file)
     pkl_file.close()
-    return (cifarMaxTransform, cifarMeanTransform,
+    return (cifarTransforms,
+            cifarMaxTransform, cifarMeanTransform,
             cifarMinTransform, cifarStdDeviation)
 
 
 # loads pre-pickled dataset of images. cmax is matrix of maximum
 # values of transform coefs, etc.  used in creating images
-cmax, cmean, cmin, cstd = loadCifarTransforms()
+cts, cmax, cmean, cmin, cstd = loadCifarTransforms()
 
 
 # find std. deviation of each transform coefficient
@@ -117,7 +118,7 @@ def importCifar100():
 # import RGB CIFAR10 batch files of 10k images
 # return 3072 x n np.array in range 0-255
 # NEEDS TO BE SCALED to +/- 1
-def importCifar10(howmany=1):
+def importCifar10(howmany=5):
     # cifar 10 data in batches 1-5
     cifar10 = np.zeros((10000*howmany, 3072), dtype='uint8')
     for i in range(1, howmany+1):
@@ -187,7 +188,7 @@ def buildPrimes(start, shape=(3, 32, 32), limit=50000):
 # steps allowed for transforms. It is ordered like a real quantization
 # matrix - less steps for less significant coeffs. Start point (500) is
 # arbitrary.
-quantization = buildPrimes(500)
+quantization = buildPrimes(100)
 
 
 # buildDataset makes a training set for network.
@@ -201,7 +202,7 @@ def buildDataset(omega):
 
     # build dataset block by block as 0-255 RGB
     for i in range(omega):
-        data[i] = getImage255(i, cifar)
+        data[i] = get_rgb_array(i, cifar)
         label[i] = 1
 
     print('building generated images slowly...')
@@ -260,7 +261,7 @@ def buildRGBIncremented(omega, inc=44777):
     count = np.zeros((3, 32, 32), dtype='float32')
     for i in range(omega):
         count = np.mod(np.add(count, inc), quantization)
-        out[i] = imY2R(idct(nextTransformAdjustable(count)))
+        out[i] = arr_y2r(idct(nextTransformAdjustable(count)))
     return out
 
 
@@ -337,12 +338,12 @@ def _reorder_from_pil(image):
     return out
 
 
-def make_pil_ycc(arr, input_format='YCbCr'):
+def make_pil(arr, input_format='YCbCr', output_format='YCbCr'):
     # take a (3, 32, 32) array in mode (default YCbCr),
     # create a PIL image in YCbCr
     im = Image.fromarray(_reorder_to_pil(arr), input_format)
-    if input_format != 'YCbCr':
-        im = im.convert('YCbCr')
+    if input_format != output_format:
+        im = im.convert(output_format)
     return im
 
 
@@ -352,6 +353,19 @@ def make_arr(img, change_format_to=False):
     if change_format_to:
         img = img.convert(change_format_to)
     return _reorder_from_pil(np.array(img))
+
+
+def arr_y2r(arr):
+    ''' take YCC array
+    return RGB array'''
+    p = make_pil(arr, output_format='RGB')
+    return make_arr(p)
+
+
+def arr_r2y(arr):
+    ''' take rgb array; return ycc array'''
+    p = make_pil(arr, input_format='RGB')
+    return make_arr(p)
 
 
 # convert from neural net data [(3,32,32) RGB +/- 1] to PIL image
@@ -416,12 +430,3 @@ def vec2int(vector):
             biggest = vector[i]
             out = i
     return out
-
-
-if __name__ == '__main__':
-    print('import cifar as c')
-    c = importCifar10()
-    print('x = trinv(c, i)')
-    x = []
-    for i in range(1):
-        x.append(trinv(c, i))

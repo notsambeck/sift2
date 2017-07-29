@@ -45,7 +45,7 @@ def trinv(data, i=0, show=False):
     arr_in = dataset.get_rgb_array(i, data)  # (3,32,32) ndarray uint8 0-255
 
     # make initial PIL image;
-    pil_in = dataset.make_pil_ycc(arr_in, input_format='RGB')
+    pil_in = dataset.make_pil(arr_in, input_format='RGB')
 
     # make a ycc version; by default make_arr preserves format
     ycc_from_image = dataset.make_arr(pil_in)
@@ -55,8 +55,8 @@ def trinv(data, i=0, show=False):
 
     errors += sigma_test(tr_inv_ycc, ycc_from_image, 'transform and inverse')
 
-    im_final = dataset.make_pil_ycc(tr_inv_ycc)
-    arr_out = dataset.make_arr(im_final, change_format='RGB')
+    im_final = dataset.make_pil(tr_inv_ycc)
+    arr_out = dataset.make_arr(im_final, change_format_to='RGB')
 
     errors += sigma_test(arr_out, arr_in, 'initial vs. final rgb')
     # img_f.show()
@@ -66,12 +66,12 @@ def trinv(data, i=0, show=False):
     return errors
 
 
-def test_conversions():
+def test_conversions(omega=10):
     print('\n running conversion tests...\n')
     # test import, convert to YCC, transform, revert
     cifar = dataset.importCifar10()
     errors = 0
-    for i in range(100):
+    for i in range(omega):
         print(i)
         errors += trinv(cifar, i)
 
@@ -106,3 +106,8 @@ def diagonalUnfold(image, channels=1):
                 vector[i, count] = image[i, 30-k, k]
                 count += 1
     return vector
+
+
+if __name__ == '__main__':
+    print('import cifar, test on i=100 images')
+    test_conversions(100)
