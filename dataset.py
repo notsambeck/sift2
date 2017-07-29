@@ -103,11 +103,11 @@ def getStdDev(transformArray):
 # google cifar for this and cifar10 dataset
 def importCifar100():
     # cifar-100 1 file
-    fo = open('data/cifar_raw_data/cifar100.pkl', 'rb')
-    u = pickle._Unpickler(fo)
-    u.encoding = 'Latin1'
-    cifar_data = u.load()
-    fo.close()
+    with open('data/cifar_raw_data/cifar100.pkl', 'rb') as fo:
+        u = pickle._Unpickler(fo)
+        u.encoding = 'Latin1'
+        cifar_data = u.load()
+
     cifar100 = cifar_data['data']
     print('Imported dataset. Samples:', len(cifar100), ', shape:',
           cifar100.shape)
@@ -119,20 +119,19 @@ def importCifar100():
 # NEEDS TO BE SCALED to +/- 1
 def importCifar10(howmany=1):
     # cifar 10 data in batches 1-5
-    cifar10 = np.zeros((50000, 3072), dtype='uint8')
+    cifar10 = np.zeros((10000*howmany, 3072), dtype='uint8')
     for i in range(1, howmany+1):
         name = ''.join(['data/cifar_raw_data/data_batch_', str(i)])
-        f = open(name, 'rb')
-        u = pickle._Unpickler(f)
-        u.encoding = 'Latin1'
-        cifar_data = u.load()
-        f.close()
+        with open(name, 'rb') as f:
+            u = pickle._Unpickler(f)
+            u.encoding = 'Latin1'
+            cifar_data = u.load()
         cifar10[(i-1)*10000:i*10000] = cifar_data['data']
     print('Imported dataset.')
-    print('Samples: {}, shape: {}, range: {} to {}.'.format(len(cifar10),
-                                                            cifar10.shape,
-                                                            cifar10.min(),
-                                                            cifar10.max()))
+    print('Samples: {}, shape: {}, datarange: {} to {}.'.format(len(cifar10),
+                                                                cifar10.shape,
+                                                                cifar10.min(),
+                                                                cifar10.max()))
     return cifar10
 
 
@@ -251,7 +250,7 @@ def buildTransformsIncremented(omega, inc=44777):
     count = np.zeros((3, 32, 32), dtype='float32')
     for i in range(omega):
         count = np.mod(np.add(count, inc), quantization)
-        out[i] = nextTransformNarrow(count)
+        out[i] = nextTransformAdjustable(count)
     return out
 
 
@@ -261,7 +260,7 @@ def buildRGBIncremented(omega, inc=44777):
     count = np.zeros((3, 32, 32), dtype='float32')
     for i in range(omega):
         count = np.mod(np.add(count, inc), quantization)
-        out[i] = imY2R(idct(nextTransformNarrow(count)))
+        out[i] = imY2R(idct(nextTransformAdjustable(count)))
     return out
 
 
@@ -312,33 +311,17 @@ def genycc(transformMax, transformMin, chopPoint=32, center=.5, sigma=.01):
     for i in range(chopPoint, 32):
         out[:, :, i] = 0
         out[:, i, :] = 0
-    return(out)
+    return out
 
 
-def generateRGBs(n, maximum, minimum):
-    randomimages = np.zeros((omega, 3, 32, 32), 'uint8')
-    for i in range(n):
-        temp = genycc(maximum, minimum)
-        # if desired: print("encoding image ", i, temp[0, 0])
-        ycc = idct(temp)
-        rgb = imY2R(ycc)
-        randomimages[i] = rgb
-    return randomimages
+# pull Nth image from CIFAR data and make  32, 32, 3 numpy.array 0-255 RGB
+def get_rgb_array(n, data):
+    arr = np.reshape(data[n], (3, 32, 32))
+    return arr
 
 
-# pull an image from CIFAR data and make  32, 32, 3 numpy.array 0-255 RGB
-def getImage255(n, dataset):
-    image = np.reshape(dataset[n], (3, 32, 32))
-    return(image)
-
-
-# takes an integer, returns that image from CIFAR in YCC format
-def getImageYCC(n, dataset):
-    return(imR2Y(getImage255(n, dataset)))
-
-
-# reorder an 0-255 (3, x, x) image to (x, x, 3) for PIL
-def to_pil(image):
+def _reorder_to_pil(image):
+    # reorder an 0-255 (3, x, x) image to (x, x, 3) for PIL
     out = np.zeros((image.shape[1], image.shape[2], 3),
                    dtype='uint8')
     for i in range(3):
@@ -346,7 +329,7 @@ def to_pil(image):
     return out
 
 
-def from_pil(image):
+def _reorder_from_pil(image):
     # reorder pil as nparray to 3, 32, 32 array for NN, etc.
     out = np.zeros((3, 32, 32), dtype='float32')
     for i in range(3):
@@ -354,41 +337,36 @@ def from_pil(image):
     return out
 
 
+def make_pil_ycc(arr, input_format='YCbCr'):
+    # take a (3, 32, 32) array in mode (default YCbCr),
+    # create a PIL image in YCbCr
+    im = Image.fromarray(_reorder_to_pil(arr), input_format)
+    if input_format != 'YCbCr':
+        im = im.convert('YCbCr')
+    return im
+
+
+def make_arr(img, change_format_to=False):
+    # takes any PIL image;
+    # returns a np.array, by default of same format ('YCbCr' or 'RGB')
+    if change_format_to:
+        img = img.convert(change_format_to)
+    return _reorder_from_pil(np.array(img))
+
+
 # convert from neural net data [(3,32,32) RGB +/- 1] to PIL image
 # call only on NN data, not images
-def net_to_PIL(data, scale=128):
-    return Image.fromarray(orderPIL(np.add(np.multiply(data, scale),
-                                           scale)))
+def net2pil(data, scale=127.5):
+    return Image.fromarray(_reorder_to_pil(np.add(np.multiply(data, scale),
+                                                  scale)))
 
 
-# SOME DATA ANALYSIS TOOLS - NOT NECESSARILY USEFUL #
-
-# look at distribution of transforms requires matplotlib import
-def plotHistogram(data, x_range=1, y_range=1, color_range=1):
-    # show histograms of transform data (columns in 4th dimension)
-    for i in range(x_range):
-        for j in range(y_range):
-            for k in range(color_range):
-                l = (str(i) + " " + str(j) + " " + str(k))
-                plt.hist(data[:, k, i, j], 50, label=l)
-    plt.legend(loc='upper right')
-    plt.show()
-
-
-# take a matrix and list it in ~order of significance of coefs.
-def diagonalUnfold(image, channels=1):
-    vector = np.zeros((channels, 1024))
-    for i in range(channels):
-        count = 0
-        for j in range(32):
-            for k in range(j+1):
-                vector[i, count] = image[i, j-k, k]
-                count += 1
-        for j in range(31):
-            for k in range(j+1):
-                vector[i, count] = image[i, 30-k, k]
-                count += 1
-    return vector
+# convert from pil image to NN data +/- 1
+def pil2net(im, scale=127.5):
+    if im.mode == 'YCbCr':
+        im = im.convert('RGB')
+    arr = _reorder_from_pil(np.array(im))
+    return np.divide(np.subtract(arr, scale), scale)
 
 
 # SIFT IMAGE (Transform) GENERATOR FUNCTIONS! #
@@ -426,53 +404,6 @@ def nextTransformAdjustable(count):
 
 
 # junk show #
-
-
-# convert an image to ycc
-# transform ycc to tr;
-# clip transform coeffs according to nextTransformAdjustable;
-# transform back to ycc
-# convert back to RGB
-# show
-def trinv(dataset, i=0):
-    img_in = getImage255(i, dataset)  # (3, 32, 32) np.ndarray uint8 0-255
-
-    p1 = to_pil(img_in)
-    print('\n p1 (rgb input)', p1.shape)
-    print(p1)
-    img1 = Image.fromarray(p1)
-    img1.show()
-
-    # ycc255 = imY2R(img_in)
-    ycc = img1.convert('YCbCr')
-    # ycc.show()
-    # transformed_back = ycc.convert('RGB')
-    # transformed_back.show()
-
-    yccarr = from_pil(np.array(ycc))
-    print('\n yccarr', yccarr.shape, type(yccarr))
-    print(yccarr)
-    tr = dct(yccarr)
-    print('\n transform', tr.shape)
-    print(tr)
-    # np.clip(tr, clow, chigh)
-
-    newycc = to_pil(idct(tr))
-    print('\n newycc', newycc.shape, type(newycc))
-    print(newycc)
-
-    largeycc = to_pil(idct_expand(tr))
-    Image.fromarray(largeycc).show()
-
-    # print('\n newycc == yccarr ?= {}'.format(np.round(newycc) == yccarr))
-
-    img_f = Image.fromarray(newycc, 'YCbCr')
-    img_f.show()
-
-    img_out = img_f.convert('RGB')
-    array_out = from_pil(np.array(img_out))
-
-    return img_in, array_out
 
 
 # vec2int converts vector NN output to an integer
