@@ -3,10 +3,10 @@
 
 import numpy as np
 import dataset
-# import matplotlib as plt
+import matplotlib.pyplot as plt
 
 
-def sigma_test(arr1, arr2, test_type, sigma=3):
+def sigma_test(arr1, arr2, test_type, sigma):
     if arr1.all() == arr2.all():
         return(0)
 
@@ -39,8 +39,10 @@ def sigma_test(arr1, arr2, test_type, sigma=3):
 # transform back to ycc
 # convert back to RGB
 # show (optional)
-def trinv(data, i=0, show=False):
-    errors = 0
+def trinv(data, i, show=False):
+    errors = 0  # counter
+    s = 3       # sigma
+
     # get rgb from dataset
     arr_in = dataset.get_rgb_array(i, data)  # (3,32,32) ndarray uint8 0-255
 
@@ -49,16 +51,18 @@ def trinv(data, i=0, show=False):
 
     # make a ycc version; by default make_arr preserves format
     ycc_from_image = dataset.make_arr(pil_in)
+    ycc_from_array = dataset.arr_r2y(arr_in)
+    errors += sigma_test(ycc_from_array, ycc_from_image, 'ycc: pil/arr_r2y', s)
 
     tr = dataset.dct(ycc_from_image)
     tr_inv_ycc = dataset.idct(tr)
 
-    errors += sigma_test(tr_inv_ycc, ycc_from_image, 'transform and inverse')
+    errors += sigma_test(tr_inv_ycc, ycc_from_image, 'transform invertable', s)
 
     im_final = dataset.make_pil(tr_inv_ycc)
     arr_out = dataset.make_arr(im_final, change_format_to='RGB')
 
-    errors += sigma_test(arr_out, arr_in, 'initial vs. final rgb')
+    errors += sigma_test(arr_out, arr_in, 'initial vs. final rgb', s)
     # img_f.show()
     if errors or show:
         im_final.show()
@@ -70,6 +74,7 @@ def test_conversions(omega=10):
     print('\n running conversion tests...\n')
     # test import, convert to YCC, transform, revert
     cifar = dataset.importCifar10()
+    print('Testing conversions.')
     errors = 0
     for i in range(omega):
         print(i)
@@ -81,11 +86,11 @@ def test_conversions(omega=10):
 # SOME DATA ANALYSIS TOOLS - NOT NECESSARILY USEFUL #
 
 # look at distribution of transforms requires matplotlib import
-def plotHistogram(data, x_range=1, y_range=1, color_range=1):
+def plotHistogram(data, x_range=2, y_range=2, colors=3):
     # show histograms of transform data (columns in 4th dimension)
     for i in range(x_range):
         for j in range(y_range):
-            for k in range(color_range):
+            for k in range(colors):
                 l = (str(i) + " " + str(j) + " " + str(k))
                 plt.hist(data[:, k, i, j], 50, label=l)
     plt.legend(loc='upper right')

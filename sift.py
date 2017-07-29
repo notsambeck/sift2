@@ -11,19 +11,19 @@ from kivy.properties import ObjectProperty
 from kivy.core.text import Label as CoreLabel
 import numpy as np
 import dataset
-from dataset import imY2R, idct
+from dataset import arr_y2r, idct
 from nolearn.lasagne import NeuralNet
 import lasagne
 import pickle
 from PIL import Image
 from lasagne import layers
 from lasagne.updates import nesterov_momentum
-from dataset import nextTransformAdjustable, quantization
+from dataset import nextTransformSimple, quantization
 import os
 import datetime
 
 # all important increment
-increment = 291
+increment = 29177
 
 imageSize = 32  # number of 'pixels' in generated images
 scale = 27      # number of screen pixels per SIFT pixel
@@ -112,7 +112,7 @@ class SiftWidget(Widget):
     print("Initializing SIFT...")
     print('')
 
-    restart = False
+    restart = True
     if not restart:
         if os.path.exists('visualized.file'):
             f = open('visualized.file', 'rb')
@@ -122,7 +122,6 @@ class SiftWidget(Widget):
             f.close()
 
     print('')
-    print('Kivy status:')
 
     # save routine (optional)
     save = False
@@ -137,12 +136,12 @@ class SiftWidget(Widget):
                 print('saving to:', directory)
 
     def update(self, dt):
-        t = nextTransformAdjustable(self.counter)
+        t = nextTransformSimple(self.counter)
         self.updateBest = False
         self.images_shown += 1
-        self.image = imY2R(idct(t))
+        self.image = arr_y2r(idct(t))
         toNet = np.zeros((1, 3, 32, 32), dtype='float32')
-        toNet[0] = np.divide(np.subtract(imY2R(idct(t)), 128.), 128.)
+        toNet[0] = np.divide(np.subtract(arr_y2r(idct(t)), 128.), 128.)
         p = savednet.predict(toNet)[0]
         self.prob = str(p)[2:8]
         self.currentLabel.text = self.prob

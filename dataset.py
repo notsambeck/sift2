@@ -34,7 +34,7 @@ omega = 1000
 
 # makeTransforms produces statistics about an image dataset (eg CIFAR)
 # and a 4-d array of all their transforms for analysis / plotting.
-# Once assembled, you can load this pickle instead of rebuilding
+# Once assembled, you can load this pickle instead of rebuilding it
 def makeTransforms(data, numberOfImages=omega):
     # initialize result arrays:
     cifarMaxTransform = np.zeros((3, 32, 32), dtype='float32')
@@ -61,11 +61,13 @@ def makeTransforms(data, numberOfImages=omega):
     with open('init_data', 'wb') as out:
         cstd = getStdDev(cifarTransforms)
 
-        pickle.dump(cifarTransforms, out)    # if you want to save all data
+        # pickle.dump(cifarTransforms, out)    # if you want to save all data
         pickle.dump(cifarMaxTransform, out)
         pickle.dump(cifarMinTransform, out)
         pickle.dump(cifarMeanTransform, out)
         pickle.dump(cstd, out)
+
+    return cifarTransforms
 
 
 # LOAD CIFAR TRANSFORMS from pickle made in makeTransforms:
@@ -74,20 +76,19 @@ def makeTransforms(data, numberOfImages=omega):
 def loadCifarTransforms(filename='init_data'):
     # cifar-100 filename including transforms: cifarTransforms.pkl
     pkl_file = open(filename, 'rb')
-    cifarTransforms = pickle.load(pkl_file)   # again, if you saved data
+    # cifarTransforms = pickle.load(pkl_file)   # again, if you saved data
     cifarMaxTransform = pickle.load(pkl_file)
     cifarMinTransform = pickle.load(pkl_file)
     cifarMeanTransform = pickle.load(pkl_file)
     cifarStdDeviation = pickle.load(pkl_file)
     pkl_file.close()
-    return (cifarTransforms,
-            cifarMaxTransform, cifarMeanTransform,
+    return (cifarMaxTransform, cifarMeanTransform,
             cifarMinTransform, cifarStdDeviation)
 
 
 # loads pre-pickled dataset of images. cmax is matrix of maximum
 # values of transform coefs, etc.  used in creating images
-cts, cmax, cmean, cmin, cstd = loadCifarTransforms()
+cmax, cmean, cmin, cstd = loadCifarTransforms()
 
 
 # find std. deviation of each transform coefficient
@@ -110,7 +111,7 @@ def importCifar100():
         cifar_data = u.load()
 
     cifar100 = cifar_data['data']
-    print('Imported dataset. Samples:', len(cifar100), ', shape:',
+    print('Imported dataset C100. Samples:', len(cifar100), ', shape:',
           cifar100.shape)
     return cifar100
 
@@ -128,7 +129,7 @@ def importCifar10(howmany=5):
             u.encoding = 'Latin1'
             cifar_data = u.load()
         cifar10[(i-1)*10000:i*10000] = cifar_data['data']
-    print('Imported dataset.')
+    print('Imported dataset: Cifar10')
     print('Samples: {}, shape: {}, datarange: {} to {}.'.format(len(cifar10),
                                                                 cifar10.shape,
                                                                 cifar10.min(),
@@ -179,8 +180,10 @@ def buildPrimes(start, shape=(3, 32, 32), limit=50000):
     for j in range(shape[1]):
         for k in range(shape[2]):
             for i in range(shape[0]):
-                out[i, 31-k, 31-j] = next(primes)
-    return out
+                try:
+                    out[i, 31-k, 31-j] = next(primes)
+                except:
+                    return out
 
 
 # quantization is now a matrix (size of an image) of all unique prime
@@ -188,15 +191,17 @@ def buildPrimes(start, shape=(3, 32, 32), limit=50000):
 # steps allowed for transforms. It is ordered like a real quantization
 # matrix - less steps for less significant coeffs. Start point (500) is
 # arbitrary.
-quantization = buildPrimes(100)
+quantization = buildPrimes(500)
 
 
 # buildDataset makes a training set for network.
+# scaled -1 to 1
 def buildDataset(omega):
     n = 3   # number of classes: cifar, small increment, big inc
     data = np.zeros((n*omega, 3, 32, 32), dtype='float32')
     label = np.zeros(n*omega, dtype='uint8')
-    cifar = load_all_cifar()
+    cifar = importCifar10()
+    cifar = np.append(cifar, importCifar100(), axis=0)
     # hard = load_hard()    # if you have hard negative examples
     print('resources loaded')
 
@@ -212,11 +217,13 @@ def buildDataset(omega):
     print('chunk2 built...')
     # data[n*omega-1978:] = hard[:1979]
 
+    '''
     # scale to +/- 1
-    data = np.subtract(data, 128.)
+    data = np.subtract(data, 127.5)
     print('centered')
-    data = np.divide(data, 128.)
+    data = np.divide(data, 127.5)
     print('normalized')
+    '''
 
     # shuffle
     state = np.random.get_state()
@@ -267,13 +274,6 @@ def buildRGBIncremented(omega, inc=44777):
 
 def load_hard():
     f = open('data/hard_images_10k.pkl', 'rb')
-    c = pickle.load(f)
-    f.close()
-    return c
-
-
-def load_all_cifar():
-    f = open('data/all_100k_cifar.pkl', 'rb')
     c = pickle.load(f)
     f.close()
     return c
@@ -352,7 +352,11 @@ def make_arr(img, change_format_to=False):
     # returns a np.array, by default of same format ('YCbCr' or 'RGB')
     if change_format_to:
         img = img.convert(change_format_to)
-    return _reorder_from_pil(np.array(img))
+    if img.mode == 'RGB':
+        return _reorder_from_pil(np.array(np.clip(img, 0, 255),
+                                          'uint8'))
+    else:
+        return _reorder_from_pil(np.array(img))
 
 
 def arr_y2r(arr):
@@ -392,7 +396,7 @@ def pil2net(im, scale=127.5):
 # narrowScale determines the range of transforms created below;
 # larger values for narrowScale create more contrast-y images.
 # 1.6 seems to be about right but this is totally subjective.
-narrowScale = 1.7
+narrowScale = 1.6
 
 # determines relative values of YCrCb components in nextTransformAdjustable:
 scaler = np.array([[[1]],
@@ -404,7 +408,8 @@ scaler = np.array([[[1]],
 # (cstd amd cmean are preloaded from pickle init.data)
 clow = np.subtract(cmean, np.multiply(narrowScale, cstd))
 # cmult is the range of transforms, scaled by number of steps i.e. quantization
-cmult = np.divide(np.multiply(2.0*narrowScale, cstd), quantization)
+# cmult = np.divide(np.multiply(2.0*narrowScale, cstd), quantization)
+cmult = np.divide(cstd, quantization)
 
 
 # nextTransformAdjustable is current version
@@ -415,6 +420,13 @@ def nextTransformAdjustable(count):
     new = np.multiply(transform, scaler)
     new[:, 0, 0] = transform[:, 0, 0]
     return new
+
+
+def nextTransformSimple(count):
+    if count.dtype != 'float32':
+        raise ValueError(count.dtype)
+    return np.add(np.subtract(cmean, cstd),
+                  np.multiply(count, cmult))
 
 
 # junk show #
