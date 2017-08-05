@@ -7,6 +7,9 @@ import pickle
 from PIL import Image
 from scipy.fftpack import dct as scidct
 
+np.set_printoptions(precision=1, suppress=True, linewidth=200,
+                    edgeitems=6, threshold=128)
+
 # import_batch is a SIFT toolset for loading pickled sets of images
 # useful for testing and retraining network:
 # import import_batch
@@ -14,15 +17,28 @@ from scipy.fftpack import dct as scidct
 
 
 def idct(x):
-    return scidct(x, type=3, norm='ortho')
+    out = np.empty((3, 32, 32))
+    for ch in range(3):
+        out[ch] = scidct(scidct(x[ch], type=3, norm='ortho', axis=0),
+                         type=3, norm='ortho', axis=1)
+    return out
 
 
 def dct(x):
-    return scidct(x, type=2, norm='ortho')
+    out = np.empty((3, 32, 32))
+    for ch in range(3):
+        out[ch] = scidct(scidct(x[ch], type=2, norm='ortho', axis=0),
+                         type=2, norm='ortho', axis=1)
+    return out
 
 
 def idct_expand(x):
-    return scidct(x, type=3, norm=None, overwrite_x=True)
+    out = np.empty((3, 32, 32))
+    for ch in range(3):
+        out[ch] = scidct(scidct(x[ch], type=3, norm=None,
+                                overwrite_x=True, axis=0),
+                         type=3, norm=None, overwrite_x=True, axis=1)
+    return out
 
 
 # optional tools for testing:
@@ -32,32 +48,39 @@ def idct_expand(x):
 omega = 1000
 
 
-# makeTransforms produces statistics about an image dataset (eg CIFAR)
-# and a 4-d array of all their transforms for analysis / plotting.
-# Once assembled, you can load this pickle instead of rebuilding it
-def makeTransforms(data, numberOfImages=omega):
+def make_transforms(data='cifar'):
+    '''makeTransforms produces statistics about an image dataset (eg CIFAR)
+    and a 4-d array of all their transforms for analysis / plotting.
+    once assembled, you can load this pickle instead of rebuilding it
+    '''
+    shape = (3, 32, 32)
+    if data == 'cifar':
+        data = np.concatenate((importCifar10(), importCifar100()), axis=0)
+    print(data.shape)
+
     # initialize result arrays:
-    cifarMaxTransform = np.zeros((3, 32, 32), dtype='float32')
-    cifarMinTransform = np.zeros((3, 32, 32), dtype='float32')
-    cifarMinTransform = np.zeros((3, 32, 32), dtype='float32')
-    total = np.zeros((3, 32, 32), dtype='float32')
+    cifarMaxTransform = np.multiply(np.ones(shape, dtype='float32'), -100000)
+    cifarMinTransform = np.multiply(np.ones(shape, dtype='float32'), 100000)
+    total = np.zeros(shape, dtype='float32')
 
     # format: RGB transforms stacked numberOfImages deep
-    cifarTransforms = np.zeros((numberOfImages, 3, 32, 32),
+    cifarTransforms = np.zeros((len(data), 3, 32, 32),
                                dtype='float32')
 
     # loop through CIFAR images
-    for i in range(numberOfImages):
+    for i in range(len(data)):
         rgb = get_rgb_array(i, data)
-        transform = dct(arr_r2y(rgb))
+        ycc = arr_r2y(rgb)
+        transform = np.ndarray(shape, dtype='float32')
+        transform = dct(ycc)
         cifarMaxTransform = np.maximum(cifarMaxTransform, transform)
         cifarMinTransform = np.minimum(cifarMinTransform, transform)
         total = np.add(total, transform)
         cifarTransforms[i] = transform
-        pct = i/numberOfImages*100
+        pct = i/len(data)*100
         if round(pct) == pct:
-            print('\r {} %'.format(pct))
-    cifarMeanTransform = np.divide(total, numberOfImages)
+            print('{} %'.format(pct), end='\r')
+    cifarMeanTransform = np.divide(total, len(data))
     with open('init_data', 'wb') as out:
         cstd = getStdDev(cifarTransforms)
 
@@ -75,13 +98,13 @@ def makeTransforms(data, numberOfImages=omega):
 # the only function needed in main app once the pickle is constructed.
 def loadCifarTransforms(filename='init_data'):
     # cifar-100 filename including transforms: cifarTransforms.pkl
-    pkl_file = open(filename, 'rb')
-    # cifarTransforms = pickle.load(pkl_file)   # again, if you saved data
-    cifarMaxTransform = pickle.load(pkl_file)
-    cifarMinTransform = pickle.load(pkl_file)
-    cifarMeanTransform = pickle.load(pkl_file)
-    cifarStdDeviation = pickle.load(pkl_file)
-    pkl_file.close()
+    with open(filename, 'rb') as f:
+        # cifarTransforms = pickle.load(f)   # again, if you saved data
+        cifarMaxTransform = pickle.load(f)
+        cifarMinTransform = pickle.load(f)
+        cifarMeanTransform = pickle.load(f)
+        cifarStdDeviation = pickle.load(f)
+
     return (cifarMaxTransform, cifarMeanTransform,
             cifarMinTransform, cifarStdDeviation)
 

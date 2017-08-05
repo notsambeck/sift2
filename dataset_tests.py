@@ -82,6 +82,15 @@ def trinv(data, i, show=False, sigma=5):
     return errors
 
 
+def test_stored_transforms():
+    dataset.make_pil(dataset.idct(dataset.cmax)).show()
+    dataset.make_pil(dataset.idct(dataset.cmin)).show()
+    dataset.make_pil(dataset.idct(dataset.cmean)).show()
+    dataset.make_pil(dataset.idct(np.add(dataset.cstd, dataset.cmean))).show()
+    dataset.make_pil(dataset.idct(np.subtract(dataset.cstd,
+                                              dataset.cmean))).show()
+
+
 def test_conversions(omega=10):
     print('\n running conversion tests...\n')
     # test import, convert to YCC, transform, revert
@@ -103,6 +112,7 @@ def test_generators(generator_function):
         im = dataset.make_pil(t, output_format='RGB')
         im.resize((128, 128))
         im.show()
+
     count = np.zeros((3, 32, 32), dtype='float32')
     test_on(count)
     test_on(dataset.quantization)
