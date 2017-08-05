@@ -16,21 +16,21 @@ np.set_printoptions(precision=1, suppress=True, linewidth=200,
 # from math import cos, pi
 
 
-def idct(x):
-    '''dct type 3 in 2D; transform -> image'''
-    out = np.empty((3, 32, 32))
-    for ch in range(3):
-        out[ch] = scidct(scidct(x[ch], type=3, norm='ortho', axis=0),
-                         type=3, norm='ortho', axis=1)
-    return out
-
-
 def dct(x):
     '''dct type 2 in 2D; image -> transform'''
     out = np.empty((3, 32, 32))
     for ch in range(3):
         out[ch] = scidct(scidct(x[ch], type=2, norm='ortho', axis=0),
                          type=2, norm='ortho', axis=1)
+    return out
+
+
+def idct(x):
+    '''dct type 3 in 2D; transform -> image'''
+    out = np.empty((3, 32, 32))
+    for ch in range(3):
+        out[ch] = scidct(scidct(x[ch], type=3, norm='ortho', axis=0),
+                         type=3, norm='ortho', axis=1)
     return out
 
 
@@ -176,26 +176,7 @@ def importCifar10(howmany=5):
     return cifar10
 
 
-# chop is an ultra-shitty compression scheme that works well
-def chop(trans, compression=1.0):
-    for i in range(round(trans.shape[-1]*compression), trans.shape[-1]):
-        trans[:, i, :] = 0
-        trans[:, :, i] = 0
-    return trans
-
-
-# find Cartesian distance from origin for a transform
-def transformDistance(dataset):
-    omega = dataset.shape[0]
-    distances = np.zeros(omega)
-    for i in range(omega):
-        distances[i] = np.power(np.sum(np.power(dataset[i], 2)), .5)
-    return distances
-
-# quantization = np.array(range(3172, 100, -1),
-#                         dtype='float32').reshape((3, 32, 32), order='F')
-# old placeholder version of quantization now replaced with prime
-
+# QUANTIZATION #
 
 def primes_sieve(limit):
     a = [True] * limit
@@ -208,7 +189,7 @@ def primes_sieve(limit):
                 a[n] = False
 
 
-def buildPrimes(start, shape=(3, 32, 32), limit=50000):
+def buildPrimes(start, shape=(3, 32, 32), limit=30000):
     '''builds a diagonal array of primes, with largest values
     in the upper left of each color channel. zeros for all values
     beyond limit'''
@@ -219,22 +200,22 @@ def buildPrimes(start, shape=(3, 32, 32), limit=50000):
     while p < start:
         p = next(primes)
     # assign primes to each quantization coefficienct
-    for j in range(shape[1]):
-        for k in range(shape[2]):
+    for j in range(32):
+        for k in range(32):
             for i in range(shape[0]):
                 try:
                     out[i, 31-k, 31-j] = next(primes)
                 except:
-                    break
+                    return out
     return out
 
 
-# quantization is now a matrix (size of an image) of all unique prime
-# numbers not really a quantization matrix but does define number of
-# steps allowed for transforms. It is ordered like a real quantization
-# matrix - less steps for less significant coeffs. Start point (500) is
-# arbitrary.
-quantization = buildPrimes(500)
+''' quantization is now a matrix (size of an image) of all unique prime
+numbers not really a quantization matrix but does define number of
+steps allowed for transforms. It is ordered like a real quantization
+matrix - less steps for less significant coeffs. Start point is
+arbitrary.'''
+quantization = buildPrimes(1)
 
 
 # buildDataset makes a training set for network.
@@ -301,22 +282,12 @@ def buildTransformsIncremented(omega, inc=44777):
     count = np.zeros((3, 32, 32), dtype='float32')
     for i in range(omega):
         count = np.mod(np.add(count, inc), quantization)
-        out[i] = nextTransformAdjustable(count)
-    return out
-
-
-# this was a float32 out, but I beleive that caused the neon blobs?
-def buildRGBIncremented(omega, inc=44777):
-    out = np.zeros((omega, 3, 32, 32), dtype='uint8')
-    count = np.zeros((3, 32, 32), dtype='float32')
-    for i in range(omega):
-        count = np.mod(np.add(count, inc), quantization)
-        out[i] = arr_y2r(idct(nextTransformAdjustable(count)))
+        out[i] = nextTransform(count)
     return out
 
 
 def load_hard():
-    f = open('data/hard_images_10k.pkl', 'rb')
+    f = open('10k_hard_images.pkl', 'rb')
     c = pickle.load(f)
     f.close()
     return c
@@ -341,21 +312,6 @@ def loadDataset(filename):
     yt = pickle.load(f)
     f.close()
     return x, xt, y, yt
-
-
-def genycc(transformMax, transformMin, chopPoint=32, center=.5, sigma=.01):
-    # generates YCC transform according to normal distribution
-    # between two limit matrices generated from CIFAR
-    out = np.zeros((3, 32, 32), dtype='float32')
-    rando = np.random.normal(loc=center, scale=sigma,
-                             size=(3, 32, 32))
-    out = np.add(transformMin,
-                 np.multiply(np.subtract(transformMax, transformMin),
-                             rando))
-    for i in range(chopPoint, 32):
-        out[:, :, i] = 0
-        out[:, i, :] = 0
-    return out
 
 
 # pull Nth image from CIFAR data and make  32, 32, 3 numpy.array 0-255 RGB
@@ -432,48 +388,28 @@ def pil2net(im, scale=127.5):
 
 # SIFT IMAGE (Transform) GENERATOR FUNCTIONS! #
 
-# all of these are functional, but nextTransformAdjustable is used
-# in SIFT for aesthetic reasons.
+# NEW VERSION of transform ranges Aug 2017 #
 
-# narrowScale determines the range of transforms created below;
-# larger values for narrowScale create more contrast-y images.
-# 1.6 seems to be about right but this is totally subjective.
-narrowScale = 1.6
+# lowest, highest are arrays of allowable values for each transform coef
+# i.e. all transforms will be clipped and/or generated in this range
+std_devs = 1.0
+lowest = np.subtract(cmean, np.multiply(std_devs, cstd))
+highest = np.add(cmean, np.multiply(std_devs, cstd))
 
-# determines relative values of YCrCb components in nextTransformAdjustable:
-scaler = np.array([[[1]],
-                   [[1.2]],
-                   [[1.2]]])
-
-# precompute some variables to speed up math:
-# clow is the mean of actual CIFAR image transforms less std. dev * narrowScale
-# (cstd amd cmean are preloaded from pickle init.data)
-clow = np.subtract(cmean, np.multiply(narrowScale, cstd))
-# cmult is the range of transforms, scaled by number of steps i.e. quantization
-cmult = np.divide(np.multiply(2.0*narrowScale, cstd), quantization)
-# cmult = np.divide(np.subtract(cmax, cmin), quantization)
+mult = np.divide(np.multiply(cstd, 2.0 * std_devs), quantization)
 
 
-# nextTransformAdjustable is current version
-def nextTransformAdjustable(count):
-    if count.dtype != 'float32':
-        raise ValueError(count.dtype)
-    transform = np.add(clow, np.multiply(count, cmult))
-    new = np.multiply(transform, scaler)
-    new[:, 0, 0] = transform[:, 0, 0]
-    return new
-
-
-def nextTransformSimple(count):
+def nextTransform(count, l=lowest, h=highest):
     '''nextTransformSimple takes a count object:
-    np.ndarray, (3, 32, 32), dtype='float32'
+    np.ndarray, (3, chop, chop), dtype='float32'
+
     output values range from cmin to cmax
     (i.e. the largest value of any image transform coef. for each component
-    it returns a transform in YCbCr colorspace
+    returns a transform in YCbCr colorspace
     '''
     if count.dtype != 'float32':
         raise ValueError(count.dtype)
-    return np.add(cmin, np.multiply(count, cmult))
+    return np.add(lowest, np.multiply(count, mult))
 
 
 # junk show #
@@ -488,4 +424,19 @@ def vec2int(vector):
         if vector[i] > biggest:
             biggest = vector[i]
             out = i
+    return out
+
+
+def genycc(transformMax, transformMin, chop=24, center=.5, sigma=.01):
+    # generates YCC transform according to normal distribution
+    # between two limit matrices generated from CIFAR
+    out = np.zeros((3, 32, 32), dtype='float32')
+    rando = np.random.normal(loc=center, scale=sigma,
+                             size=(3, 32, 32))
+    out = np.add(transformMin,
+                 np.multiply(np.subtract(transformMax, transformMin),
+                             rando))
+    for i in range(chop, 32):
+        out[:, :, i] = 0
+        out[:, i, :] = 0
     return out

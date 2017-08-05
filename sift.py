@@ -1,5 +1,5 @@
 # Image reader and generator for SIFT
-# as well as visualization with Kivy
+# visualized with Kivy
 
 from kivy.app import App
 from kivy.uix.widget import Widget
@@ -11,10 +11,9 @@ from kivy.properties import ObjectProperty
 from kivy.core.text import Label as CoreLabel
 import numpy as np
 import dataset
-from dataset import arr_y2r, idct
+from dataset import arr_y2r, idct, quantization, nextTransform
 import pickle
 from PIL import Image
-from dataset import nextTransformSimple, quantization
 import os
 import datetime
 
@@ -37,8 +36,7 @@ else:
 
 
 class SiftWidget(Widget):
-    counter = np.array(range(1, 3072000, 1000),
-                       dtype='float32').reshape((3, 32, 32), order='F')
+    counter = np.zeros((3, 32, 32), dtype='float32')
     images_found = NumericProperty(0)
     images_shown = NumericProperty(0)
     prob = StringProperty()
@@ -79,7 +77,7 @@ class SiftWidget(Widget):
                 print('saving to:', directory)
 
     def update(self, dt):
-        t = dataset.nextTransformAdjustable(self.counter)
+        t = nextTransform(self.counter)
         self.updateBest = False
         self.images_shown += 1
         self.image = arr_y2r(idct(t))
@@ -154,6 +152,10 @@ class SiftApp(App):
         sift = SiftWidget()
         Clock.schedule_interval(sift.update, 0.001)
         return sift
+
+
+def Sift():
+    SiftApp().run()
 
 
 if __name__ == "__main__":

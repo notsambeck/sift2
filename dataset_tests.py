@@ -44,7 +44,7 @@ def sigma_test(arr1, arr2, test_type, sigma):
 # convert back to RGB
 # show (optional)
 
-def trinv(data, i, show=False, sigma=5):
+def trinv(data, i, show=True, sigma=10):
     '''trinv is transform-inverse.
     takes: a dataset(4d image stack) and an integer
     returns: sigma_test of equality of input/output;
@@ -66,9 +66,10 @@ def trinv(data, i, show=False, sigma=5):
     errors += sigma_test(ycc_from_array, ycc_from_image, 'ycc: pil/arr_r2y', s)
 
     tr = dataset.dct(ycc_from_image)
-    tr_inv_ycc = dataset.idct(tr)
+    capped = np.clip(tr, dataset.lowest, dataset.highest)
+    tr_inv_ycc = dataset.idct(capped)
 
-    errors += sigma_test(tr_inv_ycc, ycc_from_image, 'transform invertable', s)
+    errors += sigma_test(tr_inv_ycc, ycc_from_image, 'transform inversion', s)
 
     im_final = dataset.make_pil(tr_inv_ycc)
     arr_out = dataset.make_arr(im_final, change_format_to='RGB')
