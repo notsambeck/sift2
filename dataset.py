@@ -380,8 +380,7 @@ def make_arr(img, change_format_to=False):
     if change_format_to:
         img = img.convert(change_format_to)
     if img.mode == 'RGB':
-        return _reorder_from_pil(np.array(np.clip(img, 0, 255),
-                                          'uint8'))
+        return _reorder_from_pil(np.array(np.clip(img, 0, 255)))
     else:
         return _reorder_from_pil(np.array(img))
 
@@ -389,13 +388,14 @@ def make_arr(img, change_format_to=False):
 def arr_y2r(arr):
     ''' take YCC array
     return RGB array'''
-    p = make_pil(arr, output_format='RGB')
+    p = make_pil(np.clip(arr, 0, 255), output_format='RGB')
     return make_arr(p)
 
 
 def arr_r2y(arr):
-    ''' take rgb array; return ycc array'''
-    p = make_pil(arr, input_format='RGB')
+    ''' take rgb array;
+    return ycc array'''
+    p = make_pil(np.clip(arr, 0, 255), input_format='RGB')
     return make_arr(p)
 
 
@@ -434,8 +434,8 @@ scaler = np.array([[[1]],
 # (cstd amd cmean are preloaded from pickle init.data)
 clow = np.subtract(cmean, np.multiply(narrowScale, cstd))
 # cmult is the range of transforms, scaled by number of steps i.e. quantization
-# cmult = np.divide(np.multiply(2.0*narrowScale, cstd), quantization)
-cmult = np.divide(cstd, quantization)
+cmult = np.divide(np.multiply(2.0*narrowScale, cstd), quantization)
+# cmult = np.divide(np.subtract(cmax, cmin), quantization)
 
 
 # nextTransformAdjustable is current version
@@ -457,8 +457,7 @@ def nextTransformSimple(count):
     '''
     if count.dtype != 'float32':
         raise ValueError(count.dtype)
-    return np.add(np.subtract(cmean, cstd),
-                  np.multiply(count, cmult))
+    return np.add(cmin, np.multiply(count, cmult))
 
 
 # junk show #

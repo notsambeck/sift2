@@ -12,12 +12,8 @@ from kivy.core.text import Label as CoreLabel
 import numpy as np
 import dataset
 from dataset import arr_y2r, idct
-from nolearn.lasagne import NeuralNet
-import lasagne
 import pickle
 from PIL import Image
-from lasagne import layers
-from lasagne.updates import nesterov_momentum
 from dataset import nextTransformSimple, quantization
 import os
 import datetime
@@ -38,59 +34,6 @@ if devMode:
     v = 2
 else:
     v = 0
-
-# call net.save_params_to('filename.pkl') to create & save file
-savednet = NeuralNet(
-    layers=[('input', layers.InputLayer),
-            ('conv2d1', layers.Conv2DLayer),
-            ('maxpool1', layers.MaxPool2DLayer),
-            ('conv2d2', layers.Conv2DLayer),
-            ('maxpool2', layers.MaxPool2DLayer),
-            ('conv2d3', layers.Conv2DLayer),
-            ('conv2d4', layers.Conv2DLayer),
-            ('dense1', layers.DenseLayer),
-            ('dropout1', layers.DropoutLayer),
-            ('dense2', layers.DenseLayer),
-            ('dropout2', layers.DropoutLayer),
-            ('dense3', layers.DenseLayer),
-            ('dropout3', layers.DropoutLayer),
-            ('output', layers.DenseLayer)],
-    input_shape=(None, 3, 32, 32),
-    conv2d1_num_filters=32,
-    conv2d1_filter_size=(5, 5),
-    conv2d1_nonlinearity=lasagne.nonlinearities.rectify,
-    maxpool1_pool_size=(2, 2),
-    conv2d2_num_filters=64,
-    conv2d2_filter_size=(4, 4),
-    conv2d2_nonlinearity=lasagne.nonlinearities.rectify,
-    maxpool2_pool_size=(2, 2),
-    conv2d3_num_filters=128,
-    conv2d3_filter_size=(2, 2),
-    conv2d3_nonlinearity=lasagne.nonlinearities.rectify,
-    conv2d4_num_filters=128,
-    conv2d4_filter_size=(2, 2),
-    conv2d4_nonlinearity=lasagne.nonlinearities.rectify,
-    conv2d4_W=lasagne.init.GlorotUniform(),
-    dense1_num_units=1024,
-    dense1_nonlinearity=lasagne.nonlinearities.rectify,
-    dropout1_p=0.5,
-    dense2_num_units=1024,
-    dense2_nonlinearity=lasagne.nonlinearities.rectify,
-    dropout2_p=0.5,
-    dense3_num_units=512,
-    dense3_nonlinearity=lasagne.nonlinearities.rectify,
-    dropout3_p=0.5,
-    output_nonlinearity=None,
-    output_num_units=1,
-    update=nesterov_momentum,
-    update_learning_rate=0.007,
-    update_momentum=.9,
-    max_epochs=1000,
-    verbose=v,
-    regression=True)
-
-
-savednet.load_params_from('regression.net')
 
 
 class SiftWidget(Widget):
@@ -136,18 +79,13 @@ class SiftWidget(Widget):
                 print('saving to:', directory)
 
     def update(self, dt):
-        t = nextTransformSimple(self.counter)
+        t = dataset.nextTransformAdjustable(self.counter)
         self.updateBest = False
         self.images_shown += 1
         self.image = arr_y2r(idct(t))
-        toNet = np.zeros((1, 3, 32, 32), dtype='float32')
-        toNet[0] = np.divide(np.subtract(arr_y2r(idct(t)), 128.), 128.)
-        p = savednet.predict(toNet)[0]
-        self.prob = str(p)[2:8]
-        self.currentLabel.text = self.prob
-        self.currentLabel.refresh()
-        self.currentTexture = self.currentLabel.texture
-        if p >= .5:
+
+        # neural net section
+        if False:
             self.bestLabel.text = self.prob
             self.bestLabel.refresh()
             self.bestTexture = self.bestLabel.texture
@@ -159,10 +97,11 @@ class SiftWidget(Widget):
                 s.save(''.join([self.directory, '/', str(self.images_found),
                                 '_viz', '.png']))
             self.bestImage = np.divide(self.image, 255.)
+
         self.counter = np.add(self.counter, increment)
         self.counter = np.mod(self.counter, quantization)
         self.canvas.clear()
-        self.showImage(p)
+        self.showImage(.75)
         self.showBest()
         if np.mod(self.images_shown, 10**4) == 0:
             print(self.images_shown, 'processed... saving to visualized.file')
@@ -175,7 +114,8 @@ class SiftWidget(Widget):
         with self.canvas:
             for j in range(imageSize):
                 for i in range(imageSize):
-                    pixel = np.divide(self.image[:, j, i], 255.)
+                    pixel = np.clip(np.divide(self.image[:, j, i], 255.),
+                                    0, 255)
                     Color(*pixel)
                     Rectangle(pos=(padX + i*scale,
                                    padY + (imageSize-j)*scale),
