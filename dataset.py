@@ -143,16 +143,19 @@ def getStdDev(transformArray):
 # import RGB CIFAR100 batch file of 50k images
 # google cifar for this and cifar10 dataset
 def importCifar100():
-    # cifar-100 1 file
+    # cifar-100 is 1 file
     with open('data/cifar_raw_data/cifar100.pkl', 'rb') as fo:
         u = pickle._Unpickler(fo)
         u.encoding = 'Latin1'
         cifar_data = u.load()
 
-    cifar100 = cifar_data['data']
-    print('Imported dataset C100. Samples:', len(cifar100), ', shape:',
-          cifar100.shape)
-    return cifar100
+    cifar = cifar_data['data']
+    print('Imported dataset: Cifar100.')
+    print('Samples: {}, shape: {}, datarange: {} to {}.'.format(len(cifar),
+                                                                cifar.shape,
+                                                                cifar.min(),
+                                                                cifar.max()))
+    return cifar
 
 
 # import RGB CIFAR10 batch files of 10k images
@@ -216,74 +219,6 @@ steps allowed for transforms. It is ordered like a real quantization
 matrix - less steps for less significant coeffs. Start point is
 arbitrary.'''
 quantization = buildPrimes(1)
-
-
-# buildDataset makes a training set for network.
-# scaled -1 to 1
-def buildDataset(omega):
-    n = 3   # number of classes: cifar, small increment, big inc
-    data = np.zeros((n*omega, 3, 32, 32), dtype='float32')
-    label = np.zeros(n*omega, dtype='uint8')
-    cifar = importCifar10()
-    cifar = np.append(cifar, importCifar100(), axis=0)
-    # hard = load_hard()    # if you have hard negative examples
-    print('resources loaded')
-
-    # build dataset block by block as 0-255 RGB
-    for i in range(omega):
-        data[i] = get_rgb_array(i, cifar)
-        label[i] = 1
-
-    print('building generated images slowly...')
-    data[omega:2*omega] = buildRGBIncremented(omega, inc=199)
-    print('chunk1 built...')
-    data[2*omega:3*omega] = buildRGBIncremented(omega, inc=3332)
-    print('chunk2 built...')
-    # data[n*omega-1978:] = hard[:1979]
-
-    '''
-    # scale to +/- 1
-    data = np.subtract(data, 127.5)
-    print('centered')
-    data = np.divide(data, 127.5)
-    print('normalized')
-    '''
-
-    # shuffle
-    state = np.random.get_state()
-    np.random.shuffle(data)
-    np.random.set_state(state)
-    np.random.shuffle(label)
-
-    # data broken up to x% / 100-x% to use as desired:
-    split = round(.95*n*omega)
-    return (data[0:split], data[split:n*omega],
-            label[0:split], label[split:n*omega])
-
-
-def combineData(x1, x2, y1, y2):
-    if x1.max() != x2.max():
-        raise ValueError('different dtypes in data to combine')
-    x = np.zeros((x1.shape[0]+x2.shape[0], 3, 32, 32), dtype='float32')
-    y = np.zeros(x1.shape[0]+x2.shape[0], dtype='uint8')
-    x[:x1.shape[0]] = x1
-    x[x1.shape[0]:] = x2
-    y[:x1.shape[0]] = y1
-    y[x1.shape[0]:] = y2
-    state = np.random.get_state()
-    np.random.shuffle(x)
-    np.random.set_state(state)
-    np.random.shuffle(y)
-    return x, y
-
-
-def buildTransformsIncremented(omega, inc=44777):
-    out = np.zeros((omega, 3, 32, 32), dtype='float32')
-    count = np.zeros((3, 32, 32), dtype='float32')
-    for i in range(omega):
-        count = np.mod(np.add(count, inc), quantization)
-        out[i] = nextTransform(count)
-    return out
 
 
 def load_hard():
@@ -392,14 +327,12 @@ def pil2net(im, scale=127.5):
 
 # lowest, highest are arrays of allowable values for each transform coef
 # i.e. all transforms will be clipped and/or generated in this range
-std_devs = 1.0
-lowest = np.subtract(cmean, np.multiply(std_devs, cstd))
-highest = np.add(cmean, np.multiply(std_devs, cstd))
-
-mult = np.divide(np.multiply(cstd, 2.0 * std_devs), quantization)
+lowest = np.subtract(cmean, cstd)
+highest = np.add(cmean, cstd)
+mult = np.divide(np.multiply(cstd, 2.0), quantization)
 
 
-def nextTransform(count, l=lowest, h=highest):
+def nextTransform(count):
     '''nextTransformSimple takes a count object:
     np.ndarray, (3, chop, chop), dtype='float32'
 
@@ -427,16 +360,82 @@ def vec2int(vector):
     return out
 
 
-def genycc(transformMax, transformMin, chop=24, center=.5, sigma=.01):
+def random_transform(mean=cmean, std_dev=cstd, sigma=1):
     # generates YCC transform according to normal distribution
     # between two limit matrices generated from CIFAR
-    out = np.zeros((3, 32, 32), dtype='float32')
-    rando = np.random.normal(loc=center, scale=sigma,
+    out = np.empty((3, 32, 32), dtype='float32')
+    rando = np.random.normal(loc=0, scale=sigma,
                              size=(3, 32, 32))
-    out = np.add(transformMin,
-                 np.multiply(np.subtract(transformMax, transformMin),
-                             rando))
-    for i in range(chop, 32):
-        out[:, :, i] = 0
-        out[:, i, :] = 0
+    out = np.add(mean, np.multiply(std_dev, rando))
     return out
+
+
+# make dataset
+
+def buildDataset(omega, lowest=lowest, highest=highest):
+    '''buildDataset makes a training set in YCbCr format.
+    generates omega * classes length set
+    all data are scaled to +/- 1'''
+    cifar = np.append(importCifar10(), importCifar100(), axis=0)
+    # make_pil(get_rgb_array(0, cifar), input_format='RGB').show()
+    # make_pil(get_rgb_array(50001, cifar), input_format='RGB').show()
+    print('resources loaded')
+
+    classes = 3
+    data = np.empty((classes*omega, 3, 32, 32), dtype='float32')
+    label = np.empty(classes*omega, dtype='uint8')
+    count = np.zeros((3, 32, 32), dtype='float32')
+
+    for i in range(omega):
+        rgb = get_rgb_array(i, cifar)
+        ycc = arr_r2y(rgb)
+        tr = dct(ycc)
+        capped = np.clip(tr, lowest, highest)
+        data[i] = idct(capped)
+
+        ycc_random = random_transform()
+        data[omega+i] = idct(ycc_random)
+
+        count = np.add(count, 42566)
+        count = np.mod(count, quantization)
+        data[2*omega+i] = idct(nextTransform(count))
+
+    for e in data:
+        e = np.multiply(1 + np.random.randn()/10, e)
+
+    np.clip(data, 0.0, 255.0, out=data)
+
+    print('Data range: min: {}, max: {}'.format(data.min(), data.max()))
+    '''
+    # scale to +/- 1
+    data = np.subtract(data, 127.5)
+    print('centered')
+    data = np.divide(data, 127.5)
+    print('normalized')
+    '''
+    # shuffle
+    state = np.random.get_state()
+    np.random.shuffle(data)
+    np.random.set_state(state)
+    np.random.shuffle(label)
+
+    # data broken up to x% / 100-x% to use as desired:
+    split = round(.95*classes*omega)
+    return (data[0:split], data[split:classes*omega],
+            label[0:split], label[split:classes*omega])
+
+
+def combineData(x1, x2, y1, y2):
+    if x1.max() != x2.max():
+        raise ValueError('different dtypes in data to combine')
+    x = np.zeros((x1.shape[0]+x2.shape[0], 3, 32, 32), dtype='float32')
+    y = np.zeros(x1.shape[0]+x2.shape[0], dtype='uint8')
+    x[:x1.shape[0]] = x1
+    x[x1.shape[0]:] = x2
+    y[:x1.shape[0]] = y1
+    y[x1.shape[0]:] = y2
+    state = np.random.get_state()
+    np.random.shuffle(x)
+    np.random.set_state(state)
+    np.random.shuffle(y)
+    return x, y
