@@ -17,6 +17,7 @@ np.set_printoptions(precision=1, suppress=True, linewidth=200,
 
 
 def idct(x):
+    '''dct type 3 in 2D; transform -> image'''
     out = np.empty((3, 32, 32))
     for ch in range(3):
         out[ch] = scidct(scidct(x[ch], type=3, norm='ortho', axis=0),
@@ -25,6 +26,7 @@ def idct(x):
 
 
 def dct(x):
+    '''dct type 2 in 2D; image -> transform'''
     out = np.empty((3, 32, 32))
     for ch in range(3):
         out[ch] = scidct(scidct(x[ch], type=2, norm='ortho', axis=0),
@@ -32,12 +34,26 @@ def dct(x):
     return out
 
 
-def idct_expand(x):
-    out = np.empty((3, 32, 32))
+def expand(im):
+    '''expand takes a 32x32 image and expands it by DCT/iDCT
+    does not change colorspace'''
+    newsize = 512
+
+    tr = np.empty((3, 32, 32))
+    out = np.empty((3, newsize, newsize))
+
     for ch in range(3):
-        out[ch] = scidct(scidct(x[ch], type=3, norm=None,
-                                overwrite_x=True, axis=0),
-                         type=3, norm=None, overwrite_x=True, axis=1)
+        tr[ch] = scidct(scidct(im[ch], type=2, norm='ortho',
+                               axis=0),
+                        type=2, norm='ortho', axis=1)
+
+    for ch in range(3):
+        out[ch] = scidct(scidct(tr[ch], type=3, norm='ortho',
+                                axis=0, n=newsize),
+                         type=3, norm='ortho', axis=1, n=newsize)
+        m = out[ch].max()
+        out[ch] = np.clip(np.multiply(out[ch], 255 / m), 0, 255)
+
     return out
 
 
@@ -366,8 +382,8 @@ def _reorder_from_pil(image):
 
 
 def make_pil(arr, input_format='YCbCr', output_format='YCbCr'):
-    # take a (3, 32, 32) array in mode (default YCbCr),
-    # create a PIL image in YCbCr
+    '''take a (3, 32, 32) array in mode input_format (default YCbCr),
+   create a PIL image in YCbCr'''
     im = Image.fromarray(_reorder_to_pil(arr), input_format)
     if input_format != output_format:
         im = im.convert(output_format)
