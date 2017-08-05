@@ -2,11 +2,15 @@
 # also includes histograms, assorted non-core data tools
 
 import numpy as np
-import dataset
 import matplotlib.pyplot as plt
+import dataset
 
 
 def sigma_test(arr1, arr2, test_type, sigma):
+    '''test equality of 2 arrays within +/- sigma per element
+    takes arr1, arr2, test_type (string for printout only) and sigma
+    returns 1 if ~=, 0 if !='''
+
     if arr1.all() == arr2.all():
         return(0)
 
@@ -39,9 +43,16 @@ def sigma_test(arr1, arr2, test_type, sigma):
 # transform back to ycc
 # convert back to RGB
 # show (optional)
-def trinv(data, i, show=False):
-    errors = 0  # counter
-    s = 3       # sigma
+
+def trinv(data, i, show=False, sigma=5):
+    '''trinv is transform-inverse.
+    takes: a dataset(4d image stack) and an integer
+    returns: sigma_test of equality of input/output;
+    0 if !=, 1 if ~=
+    parameter s is sigma (internal)'''
+
+    errors = 0   # counter
+    s = sigma   # sigma
 
     # get rgb from dataset
     arr_in = dataset.get_rgb_array(i, data)  # (3,32,32) ndarray uint8 0-255
@@ -64,7 +75,8 @@ def trinv(data, i, show=False):
 
     errors += sigma_test(arr_out, arr_in, 'initial vs. final rgb', s)
     # img_f.show()
-    if errors or show:
+    if errors and show:
+        pil_in.show()
         im_final.show()
 
     return errors
@@ -81,6 +93,19 @@ def test_conversions(omega=10):
         errors += trinv(cifar, i)
 
     print('\n TOTAL ERRORS:', errors)
+
+
+def test_generators(generator_function):
+    print('\n testing image generator: {}'.format(generator_function))
+
+    def test_on(count):
+        t = generator_function(count)
+        im = dataset.make_pil(t, output_format='RGB')
+        im.resize((128, 128))
+        im.show()
+    count = np.zeros((3, 32, 32), dtype='float32')
+    test_on(count)
+    test_on(dataset.quantization)
 
 
 # SOME DATA ANALYSIS TOOLS - NOT NECESSARILY USEFUL #

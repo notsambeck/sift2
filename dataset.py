@@ -170,6 +170,9 @@ def primes_sieve(limit):
 
 
 def buildPrimes(start, shape=(3, 32, 32), limit=50000):
+    '''builds a diagonal array of primes, with largest values
+    in the upper left of each color channel. zeros for all values
+    beyond limit'''
     out = np.ones(shape, dtype='float32')
     primes = primes_sieve(limit)
     # go to start value
@@ -183,7 +186,8 @@ def buildPrimes(start, shape=(3, 32, 32), limit=50000):
                 try:
                     out[i, 31-k, 31-j] = next(primes)
                 except:
-                    return out
+                    break
+    return out
 
 
 # quantization is now a matrix (size of an image) of all unique prime
@@ -392,7 +396,6 @@ def pil2net(im, scale=127.5):
 # all of these are functional, but nextTransformAdjustable is used
 # in SIFT for aesthetic reasons.
 
-
 # narrowScale determines the range of transforms created below;
 # larger values for narrowScale create more contrast-y images.
 # 1.6 seems to be about right but this is totally subjective.
@@ -423,6 +426,12 @@ def nextTransformAdjustable(count):
 
 
 def nextTransformSimple(count):
+    '''nextTransformSimple takes a count object:
+    np.ndarray, (3, 32, 32), dtype='float32'
+    output values range from cmin to cmax
+    (i.e. the largest value of any image transform coef. for each component
+    it returns a transform in YCbCr colorspace
+    '''
     if count.dtype != 'float32':
         raise ValueError(count.dtype)
     return np.add(np.subtract(cmean, cstd),
