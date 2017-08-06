@@ -24,14 +24,14 @@ def sigma_test(arr1, arr2, test_type, sigma):
     else:
         count = 0
         diff = np.subtract(arr1, arr2)
-        for d in range(3):
+        for ch in range(3):
             for i in range(32):
                 for j in range(32):
-                    if diff[d][i][j] > sigma or diff[d][i][j] < -sigma:
+                    if diff[i, j, ch] > sigma or diff[i, j, ch] < -sigma:
                         count += 1
-        if count > 1:
-            print('FAIL {} for sigma = {} ?'.format(test_type, sigma))
-            print('#elements outside sigma: {}'.format(count))
+        if count > 0:
+            print('errors found: {} for sigma = {} ?'.format(test_type, sigma))
+            print('num. elements outside sigma: {}'.format(count))
             return 1
     return 0
 
@@ -44,18 +44,20 @@ def sigma_test(arr1, arr2, test_type, sigma):
 # convert back to RGB
 # show (optional)
 
-def trinv(data, i, show=True, sigma=10):
+def trinv(data, i, show=1, sigma=10):
     '''trinv is transform-inverse.
-    takes: a dataset(4d image stack) and an integer
-    returns: sigma_test of equality of input/output;
+    takes: a dataset(4d image stack) and sigma=integer
+    returns: sum of errors from sigma_tests of equality of input/output;
     0 if !=, 1 if ~=
-    parameter s is sigma (internal)'''
+    '''
 
     errors = 0   # counter
-    s = sigma   # sigma
+    s = sigma    # sigma
 
     # get rgb from dataset
-    arr_in = dataset.get_rgb_array(i, data)  # (3,32,32) ndarray uint8 0-255
+    arr_in = dataset.get_rgb_array(i, data)  # (32,32,3) ndarray uint8 0-255
+    if show > 1:
+        print('input array: {}'.format(arr_in.shape))
 
     # make initial PIL image;
     pil_in = dataset.make_pil(arr_in, input_format='RGB')
@@ -63,11 +65,20 @@ def trinv(data, i, show=True, sigma=10):
     # make a ycc version; by default make_arr preserves format
     ycc_from_image = dataset.make_arr(pil_in)
     ycc_from_array = dataset.arr_r2y(arr_in)
+    if show > 1:
+        print('ycc arr: dtype = {}, Y channel ='.format(ycc_from_array.dtype))
+        print(ycc_from_array[:, :, 0])
     errors += sigma_test(ycc_from_array, ycc_from_image, 'ycc: pil/arr_r2y', s)
 
     tr = dataset.dct(ycc_from_image)
+    if show > 1:
+        print('transform: dtype = {}; Y channel ='.format(tr.dtype))
+        print(tr[:, :, 0])
     capped = np.clip(tr, dataset.lowest, dataset.highest)
     tr_inv_ycc = dataset.idct(capped)
+    if show > 1:
+        print('ycc from idct: dtype={}; Y channel ='.format(tr_inv_ycc.dtype))
+        print(tr_inv_ycc[:, :, 0])
 
     errors += sigma_test(tr_inv_ycc, ycc_from_image, 'transform inversion', s)
 
@@ -76,7 +87,7 @@ def trinv(data, i, show=True, sigma=10):
 
     errors += sigma_test(arr_out, arr_in, 'initial vs. final rgb', s)
     # img_f.show()
-    if errors and show:
+    if (errors and show) or show > 1:
         pil_in.show()
         im_final.show()
 
@@ -92,7 +103,7 @@ def test_stored_transforms():
                                               dataset.cmean))).show()
 
 
-def test_conversions(omega=10):
+def test_conversions(omega=3):
     print('\n running conversion tests...\n')
     # test import, convert to YCC, transform, revert
     cifar = dataset.importCifar10()

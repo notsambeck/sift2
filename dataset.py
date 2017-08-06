@@ -18,19 +18,21 @@ np.set_printoptions(precision=1, suppress=True, linewidth=200,
 
 def dct(x):
     '''dct type 2 in 2D; image -> transform'''
-    out = np.empty((3, 32, 32))
+    out = np.empty((32, 32, 3), dtype='float32')
     for ch in range(3):
-        out[ch] = scidct(scidct(x[ch], type=2, norm='ortho', axis=0),
-                         type=2, norm='ortho', axis=1)
+        out[:, :, ch] = scidct(scidct(x[:, :, ch], type=2,
+                                      norm='ortho', axis=0),
+                               type=2, norm='ortho', axis=1)
     return out
 
 
 def idct(x):
     '''dct type 3 in 2D; transform -> image'''
-    out = np.empty((3, 32, 32))
+    out = np.empty((32, 32, 3), dtype='uint8')
     for ch in range(3):
-        out[ch] = scidct(scidct(x[ch], type=3, norm='ortho', axis=0),
-                         type=3, norm='ortho', axis=1)
+        out[:, :, ch] = scidct(scidct(x[:, :, ch], type=3,
+                                      norm='ortho', axis=0),
+                               type=3, norm='ortho', axis=1)
     return out
 
 
@@ -69,7 +71,7 @@ def make_transforms(data='cifar'):
     and a 4-d array of all their transforms for analysis / plotting.
     once assembled, you can load this pickle instead of rebuilding it
     '''
-    shape = (3, 32, 32)
+    shape = (32, 32, 3)
     if data == 'cifar':
         data = np.concatenate((importCifar10(), importCifar100()), axis=0)
     print(data.shape)
@@ -80,7 +82,7 @@ def make_transforms(data='cifar'):
     total = np.zeros(shape, dtype='float32')
 
     # format: RGB transforms stacked numberOfImages deep
-    cifarTransforms = np.zeros((len(data), 3, 32, 32),
+    cifarTransforms = np.zeros((len(data), 32, 32, 3),
                                dtype='float32')
 
     # loop through CIFAR images
@@ -105,7 +107,6 @@ def make_transforms(data='cifar'):
         pickle.dump(cifarMinTransform, out)
         pickle.dump(cifarMeanTransform, out)
         pickle.dump(cstd, out)
-
     return cifarTransforms
 
 
@@ -132,11 +133,11 @@ cmax, cmean, cmin, cstd = loadCifarTransforms()
 
 # find std. deviation of each transform coefficient
 def getStdDev(transformArray):
-    out = np.zeros((3, 32, 32), dtype='float32')
+    out = np.zeros((32, 32, 3), dtype='float32')
     for row in range(32):
         for col in range(32):
-            for chan in range(3):
-                out[chan, row, col] = transformArray[:, chan, row, col].std()
+            for ch in range(3):
+                out[row, col, ch] = transformArray[:, row, col, ch].std()
     return out
 
 
@@ -192,9 +193,9 @@ def primes_sieve(limit):
                 a[n] = False
 
 
-def buildPrimes(start, shape=(3, 32, 32), limit=30000):
+def buildPrimes(start, shape=(32, 32, 3), limit=30000):
     '''builds a diagonal array of primes, with largest values
-    in the upper left of each color channel. zeros for all values
+    in the upper left of each color channel. ones for all values
     beyond limit'''
     out = np.ones(shape, dtype='float32')
     primes = primes_sieve(limit)
@@ -205,9 +206,9 @@ def buildPrimes(start, shape=(3, 32, 32), limit=30000):
     # assign primes to each quantization coefficienct
     for j in range(32):
         for k in range(32):
-            for i in range(shape[0]):
+            for ch in range(3):
                 try:
-                    out[i, 31-k, 31-j] = next(primes)
+                    out[31-k, 31-j, ch] = next(primes)
                 except:
                     return out
     return out
@@ -252,44 +253,33 @@ def load_dataset(filename):
 # pull Nth image from CIFAR data and make  32, 32, 3 numpy.array 0-255 RGB
 def get_rgb_array(n, data):
     arr = np.reshape(data[n], (3, 32, 32))
-    return arr
+    return _reorder(arr)
 
 
-def _reorder_to_pil(image):
-    # reorder an 0-255 (3, x, x) image to (x, x, 3) for PIL
-    out = np.zeros((image.shape[1], image.shape[2], 3),
+def _reorder(arr):
+    # reorder originial 0-255 (3, x, x) image to (x, x, 3) for PIL/NN
+    out = np.zeros((arr.shape[1], arr.shape[2], 3),
                    dtype='uint8')
     for i in range(3):
-        out[:, :, i] = image[i]
-    return out
-
-
-def _reorder_from_pil(image):
-    # reorder pil as nparray to 3, 32, 32 array for NN, etc.
-    out = np.zeros((3, 32, 32), dtype='float32')
-    for i in range(3):
-        out[i] = image[:, :, i]
+        out[:, :, i] = arr[i]
     return out
 
 
 def make_pil(arr, input_format='YCbCr', output_format='YCbCr'):
-    '''take a (3, 32, 32) array in mode input_format (default YCbCr),
+    '''take a (32, 32, 3) array in mode input_format (default YCbCr),
     create a PIL image in YCbCr'''
-    im = Image.fromarray(_reorder_to_pil(arr), input_format)
+    im = Image.fromarray(arr, input_format)
     if input_format != output_format:
         im = im.convert(output_format)
     return im
 
 
 def make_arr(img, change_format_to=False):
-    # takes any PIL image;
-    # returns a np.array, by default of same format ('YCbCr' or 'RGB')
+    '''takes any PIL image;
+    returns a np.array, by default of same format ('YCbCr' or 'RGB')'''
     if change_format_to:
         img = img.convert(change_format_to)
-    if img.mode == 'RGB':
-        return _reorder_from_pil(np.array(np.clip(img, 0, 255)))
-    else:
-        return _reorder_from_pil(np.array(img))
+    return np.array(np.clip(img, 0, 255))
 
 
 def arr_y2r(arr):
@@ -312,9 +302,9 @@ def show_data(dataset, i=0):
 
 # convert from pil image to NN data +/- 1
 def pil2net(im, scale=127.5):
-    if im.mode == 'YCbCr':
-        im = im.convert('RGB')
-    arr = _reorder_from_pil(np.array(im))
+    if im.mode == 'RGB':
+        im = im.convert('YCbCr')
+    arr = np.array(im)
     return np.divide(np.subtract(arr, scale), scale)
 
 
@@ -339,7 +329,7 @@ def nextTransform(count):
     '''
     if count.dtype != 'float32':
         raise ValueError(count.dtype)
-    return np.add(lowest, np.multiply(count, mult))
+    # return np.add(lowest, np.multiply(count, mult))
 
 
 # junk show #
