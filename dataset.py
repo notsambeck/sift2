@@ -37,7 +37,8 @@ def idct(x):
 def expand(im):
     '''expand takes a 32x32 image and expands it by DCT/iDCT
     does not change colorspace'''
-    newsize = 512
+    scale_x = 16
+    newsize = scale_x * 32
 
     tr = np.empty((3, 32, 32))
     out = np.empty((3, newsize, newsize))
@@ -46,15 +47,14 @@ def expand(im):
         tr[ch] = scidct(scidct(im[ch], type=2, norm='ortho',
                                axis=0),
                         type=2, norm='ortho', axis=1)
-
+    tr_pad = np.zeros((3, newsize, newsize), dtype='float32')
+    tr_pad[:, :32, :32] = np.multiply(tr, scale_x)
     for ch in range(3):
-        out[ch] = scidct(scidct(tr[ch], type=3, norm='ortho',
+        out[ch] = scidct(scidct(tr_pad[ch], type=3, norm='ortho',
                                 axis=0, n=newsize),
                          type=3, norm='ortho', axis=1, n=newsize)
-        m = out[ch].max()
-        out[ch] = np.clip(np.multiply(out[ch], 255 / m), 0, 255)
 
-    return out
+    return np.clip(out, 0, 255)
 
 
 # optional tools for testing:
@@ -274,7 +274,7 @@ def _reorder_from_pil(image):
 
 def make_pil(arr, input_format='YCbCr', output_format='YCbCr'):
     '''take a (3, 32, 32) array in mode input_format (default YCbCr),
-   create a PIL image in YCbCr'''
+    create a PIL image in YCbCr'''
     im = Image.fromarray(_reorder_to_pil(arr), input_format)
     if input_format != output_format:
         im = im.convert(output_format)
