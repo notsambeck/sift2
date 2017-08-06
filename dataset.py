@@ -6,6 +6,8 @@ import numpy as np
 import pickle
 from PIL import Image
 from scipy.fftpack import dct as scidct
+import tensorflow as tf
+
 
 np.set_printoptions(precision=1, suppress=True, linewidth=200,
                     edgeitems=6, threshold=128)
@@ -359,8 +361,15 @@ def random_transform(mean=cmean, std_dev=cstd, sigma=1):
 
 
 # make dataset
+def _int64_feature(value):
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
-def build_dataset(omega, lowest=lowest, highest=highest, save=False):
+
+def _bytes_feature(value):
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+
+def build_dataset(omega, lowest=lowest, highest=highest, save=False, name=''):
     '''build_dataset makes a training set in YCbCr format.
     generates omega * classes length set
     all data are scaled to +/- 1'''
@@ -411,14 +420,34 @@ def build_dataset(omega, lowest=lowest, highest=highest, save=False):
     np.random.set_state(state)
     np.random.shuffle(labels)
 
-    # data broken up to x% / 100-x% to use as desired:
-    split = round(.9*classes*omega)
-    if save:
-        save_dataset(save, data[0:split], data[split:classes*omega],
+    if save == 'pkl':
+        # data broken up to x% / 100-x% to use as desired:
+        split = round(.9*classes*omega)
+        save_dataset(''.join([name, '.pkl']),
+                     data[0:split], data[split:classes*omega],
                      labels[0:split], labels[split:classes*omega])
 
-    return (data[0:split], data[split:classes*omega],
-            labels[0:split], labels[split:classes*omega])
+    subsets = 10
+    subset_size = len(data) // subsets
+    if save == 'tfrecord':
+        for subset in range(subsets):
+            filename = ''.join([name, '_', str(subset), '.tfrecord'])
+            print('writing tfrecord to {}'.format(filename))
+            writer = tf.python_io.TFRecordWriter(filename)
+            for i in range(subset_size):
+                image_raw = data[subset*subset_size + i].tostring()
+                example = tf.train.Example(features=tf.train.Features(feature={
+                    'height': _int64_feature(32),
+                    'width': _int64_feature(32),
+                    'depth': _int64_feature(3),
+                    'label': _int64_feature(int(labels[i])),
+                    'image_raw': _bytes_feature(image_raw)}))
+                writer.write(example.SerializeToString())
+            writer.close()
+
+    if not save:
+        return (data[0:split], data[split:classes*omega],
+                labels[0:split], labels[split:classes*omega])
 
 
 def combineData(x1, x2, y1, y2):

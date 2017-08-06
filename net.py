@@ -80,7 +80,7 @@ accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
-    data_x, data_xt, int_y, int_yt = load_dataset('data/trial.pkl')
+    data_x, data_xt, int_y, int_yt = load_dataset('data/randomized_2017aug6.pkl')
     l_y, l_yt = np.empty((len(int_y), 2)), np.empty((len(int_yt), 2))
     for i in range(len(int_y)):
         if int_y[i]:
@@ -98,11 +98,14 @@ with tf.Session() as sess:
             l_yt[i][1] = 0
 
     for i in range(100):
-        if i % 10 == 0:
-            train_accuracy = accuracy.eval(feed_dict={
-                x: data_x, y_: l_y, keep_prob: 1.0})
-            print('step %d, train_accuracy %g' % (i, train_accuracy))
-        train_step.run(feed_dict={x: data_x, y_: l_y, keep_prob: 0.5})
+        test_acc = accuracy.eval(feed_dict={x: data_xt[:100],
+                                            y_: l_yt[:100],
+                                            keep_prob: 1.0})
+        print('step %d, test_accuracy %g' % (i, test_acc))
+        for j in range(60):
+            train_step.run(feed_dict={x: data_x[5000*j:5000*(j+1)],
+                                      y_: l_y[5000*j:5000*(j+1)],
+                                      keep_prob: 0.5})
 
     print('test accuracy %g' % accuracy.eval(feed_dict={
         x: data_xt, y_: l_yt, keep_prob: 1.0}))
