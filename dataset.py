@@ -28,12 +28,12 @@ def dct(x):
 
 def idct(x):
     '''dct type 3 in 2D; transform -> image'''
-    out = np.empty((32, 32, 3), dtype='uint8')
+    out = np.empty((32, 32, 3), dtype='float32')
     for ch in range(3):
         out[:, :, ch] = scidct(scidct(x[:, :, ch], type=3,
                                       norm='ortho', axis=0),
                                type=3, norm='ortho', axis=1)
-    return out
+    return np.clip(out, 0, 255).astype('uint8')
 
 
 def expand(im):
@@ -297,7 +297,8 @@ def arr_r2y(arr):
 
 
 def show_data(dataset, i=0):
-    make_pil(np.add(np.multiply(dataset[i], 127.5), 127.5)).show()
+    im = np.add(np.multiply(dataset[i], 127.5), 127.5)
+    make_pil(np.clip(im, 0, 255).astype('uint8')).show()
 
 
 # convert from pil image to NN data +/- 1
@@ -319,7 +320,7 @@ highest = np.add(cmean, cstd)
 mult = np.divide(np.multiply(cstd, 2.0), quantization)
 
 
-def nextTransform(count):
+def get_transform(count):
     '''nextTransformSimple takes a count object:
     np.ndarray, (3, chop, chop), dtype='float32'
 
@@ -329,7 +330,7 @@ def nextTransform(count):
     '''
     if count.dtype != 'float32':
         raise ValueError(count.dtype)
-    # return np.add(lowest, np.multiply(count, mult))
+    return np.add(lowest, np.multiply(count, mult))
 
 
 # junk show #
@@ -350,9 +351,9 @@ def vec2int(vector):
 def random_transform(mean=cmean, std_dev=cstd, sigma=1):
     # generates YCC transform according to normal distribution
     # between two limit matrices generated from CIFAR
-    out = np.empty((3, 32, 32), dtype='float32')
+    out = np.empty((32, 32, 3), dtype='float32')
     rando = np.random.normal(loc=0, scale=sigma,
-                             size=(3, 32, 32))
+                             size=(32, 32, 3))
     out = np.add(mean, np.multiply(std_dev, rando))
     return out
 
@@ -369,9 +370,9 @@ def build_dataset(omega, lowest=lowest, highest=highest, save=False):
     print('resources loaded')
 
     classes = 3
-    data = np.empty((classes*omega, 3, 32, 32), dtype='float32')
+    data = np.empty((classes*omega, 32, 32, 3), dtype='float32')
     labels = np.empty(classes*omega, dtype='uint8')
-    count = np.zeros((3, 32, 32), dtype='float32')
+    count = np.zeros((32, 32, 3), dtype='float32')
 
     for i in range(omega):
         rgb = get_rgb_array(i, cifar)
@@ -387,7 +388,7 @@ def build_dataset(omega, lowest=lowest, highest=highest, save=False):
 
         count = np.add(count, 42566)
         count = np.mod(count, quantization)
-        data[2*omega+i] = idct(nextTransform(count))
+        data[2*omega+i] = idct(get_transform(count))
         labels[2*omega+i] = 0
 
     for e in data:

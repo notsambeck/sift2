@@ -5,7 +5,7 @@ import tensorflow as tf
 import numpy as np
 from dataset import load_dataset
 
-x = tf.placeholder(tf.float32, shape=[None, 3, 32, 32])
+x = tf.placeholder(tf.float32, shape=[None, 32, 32, 3])
 y_ = tf.placeholder(tf.float32, shape=[None, 2])
 
 
@@ -37,7 +37,7 @@ W_conv1 = weight_variable([5, 5, 3, 32])
 b_conv1 = bias_variable([32])
 
 
-# apply rectifier to convolution
+# apply rectifier activation convolution; ? 32, 32, 32
 h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
 # apply max_pool; h_pool1.shape=(
 h_pool1 = max_pool_2x2(h_conv1)
@@ -46,9 +46,9 @@ h_pool1 = max_pool_2x2(h_conv1)
 W_conv2 = weight_variable([5, 5, 32, 64])
 b_conv2 = bias_variable([64])
 
-# apply rectifier to convolution
+# rectifier conv 2: ?, 16, 16, 64
 h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
-# apply max_pool; h_pool1.shape=(?, 7, 7, 64)
+# apply max_pool; h_pool1.shape=(?, 8, 8, 64)
 h_pool2 = max_pool_2x2(h_conv2)
 
 
@@ -80,7 +80,7 @@ accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
-    data_x, data_xt, int_y, int_yt = load_dataset('data/august2017_trial_size.pkl')
+    data_x, data_xt, int_y, int_yt = load_dataset('data/trial.pkl')
     l_y, l_yt = np.empty((len(int_y), 2)), np.empty((len(int_yt), 2))
     for i in range(len(int_y)):
         if int_y[i]:
