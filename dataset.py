@@ -229,7 +229,7 @@ def load_hard():
 
 
 # used 10/15 to save full cifar 100 datatset, should be good to go.
-def saveDataset(filename, x, xt, y, yt):
+def save_dataset(filename, x, xt, y, yt):
     out = open(filename, 'wb')
     pickle.dump(x, out)
     pickle.dump(xt, out)
@@ -239,7 +239,7 @@ def saveDataset(filename, x, xt, y, yt):
 
 
 # call: x, xt, y, yt = loadDataset('
-def loadDataset(filename):
+def load_dataset(filename):
     f = open(filename, 'rb')
     x = pickle.load(f)
     xt = pickle.load(f)
@@ -306,11 +306,8 @@ def arr_r2y(arr):
     return make_arr(p)
 
 
-# convert from neural net data [(3,32,32) RGB +/- 1] to PIL image
-# call only on NN data, not images
-def net2pil(data, scale=127.5):
-    return Image.fromarray(_reorder_to_pil(np.add(np.multiply(data, scale),
-                                                  scale)))
+def show_data(dataset, i=0):
+    make_pil(np.add(np.multiply(dataset[i], 127.5), 127.5)).show()
 
 
 # convert from pil image to NN data +/- 1
@@ -372,8 +369,8 @@ def random_transform(mean=cmean, std_dev=cstd, sigma=1):
 
 # make dataset
 
-def buildDataset(omega, lowest=lowest, highest=highest):
-    '''buildDataset makes a training set in YCbCr format.
+def build_dataset(omega, lowest=lowest, highest=highest, save=False):
+    '''build_dataset makes a training set in YCbCr format.
     generates omega * classes length set
     all data are scaled to +/- 1'''
     cifar = np.append(importCifar10(), importCifar100(), axis=0)
@@ -383,7 +380,7 @@ def buildDataset(omega, lowest=lowest, highest=highest):
 
     classes = 3
     data = np.empty((classes*omega, 3, 32, 32), dtype='float32')
-    label = np.empty(classes*omega, dtype='uint8')
+    labels = np.empty(classes*omega, dtype='uint8')
     count = np.zeros((3, 32, 32), dtype='float32')
 
     for i in range(omega):
@@ -392,37 +389,45 @@ def buildDataset(omega, lowest=lowest, highest=highest):
         tr = dct(ycc)
         capped = np.clip(tr, lowest, highest)
         data[i] = idct(capped)
+        labels[i] = 1
 
         ycc_random = random_transform()
         data[omega+i] = idct(ycc_random)
+        labels[omega+i] = 0
 
         count = np.add(count, 42566)
         count = np.mod(count, quantization)
         data[2*omega+i] = idct(nextTransform(count))
+        labels[2*omega+i] = 0
 
     for e in data:
         e = np.multiply(1 + np.random.randn()/10, e)
 
-    np.clip(data, 0.0, 255.0, out=data)
+    print('Input data range: min: {}, max: {}'.format(data.min(), data.max()))
 
-    print('Data range: min: {}, max: {}'.format(data.min(), data.max()))
-    '''
+    np.clip(data, 0.0, 255.0, out=data)
     # scale to +/- 1
     data = np.subtract(data, 127.5)
     print('centered')
     data = np.divide(data, 127.5)
-    print('normalized')
-    '''
-    # shuffle
+    print('normalized;')
+    print('output data range: min: {}, max: {}'.format(data.min(), data.max()))
+    print('labels: # positive examples: {}'.format(sum(labels)))
+
+    # shuffle data
     state = np.random.get_state()
     np.random.shuffle(data)
     np.random.set_state(state)
-    np.random.shuffle(label)
+    np.random.shuffle(labels)
 
     # data broken up to x% / 100-x% to use as desired:
-    split = round(.95*classes*omega)
+    split = round(.9*classes*omega)
+    if save:
+        save_dataset(save, data[0:split], data[split:classes*omega],
+                     labels[0:split], labels[split:classes*omega])
+
     return (data[0:split], data[split:classes*omega],
-            label[0:split], label[split:classes*omega])
+            labels[0:split], labels[split:classes*omega])
 
 
 def combineData(x1, x2, y1, y2):
