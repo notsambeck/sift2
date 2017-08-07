@@ -399,6 +399,8 @@ def build_dataset(omega, lowest=lowest, highest=highest, save=False, name=''):
         count = np.mod(count, quantization)
         data[2*omega+i] = idct(get_transform(count))
         labels[2*omega+i] = 0
+        if i % (omega // 100) == 0:
+            print('{} %'.format(i * 100 / omega), end='\r')
 
     for e in data:
         e = np.multiply(1 + np.random.randn()/10, e)
@@ -427,15 +429,16 @@ def build_dataset(omega, lowest=lowest, highest=highest, save=False, name=''):
                      data[0:split], data[split:classes*omega],
                      labels[0:split], labels[split:classes*omega])
 
-    subsets = 10
-    subset_size = len(data) // subsets
-    if save == 'tfrecord':
-        for subset in range(subsets):
-            filename = ''.join([name, '_', str(subset), '.tfrecord'])
-            print('writing tfrecord to {}'.format(filename))
-            writer = tf.python_io.TFRecordWriter(filename)
-            for i in range(subset_size):
-                image_raw = data[subset*subset_size + i].tostring()
+    chunks = 10
+    chunk_size = len(data) // chunks
+    if save:
+        if save == 'tfrecord':
+            for chunk in range(chunks):
+                filename = ''.join(['data/', name, '_', str(chunk), '.tfrec'])
+                print('writing tfrecord to {}'.format(filename))
+                writer = tf.python_io.TFRecordWriter(filename)
+            for i in range(chunk_size):
+                image_raw = data[chunk*chunk_size + i].tostring()
                 example = tf.train.Example(features=tf.train.Features(feature={
                     'height': _int64_feature(32),
                     'width': _int64_feature(32),
@@ -443,11 +446,22 @@ def build_dataset(omega, lowest=lowest, highest=highest, save=False, name=''):
                     'label': _int64_feature(int(labels[i])),
                     'image_raw': _bytes_feature(image_raw)}))
                 writer.write(example.SerializeToString())
-            writer.close()
+                writer.close()
+        elif save == 'pkl':
+            for chunk in range(chunks):
+                filename = ''.join(['data/', name, '_', str(chunk), '.pkl'])
+                print('writing tfrecord to {}'.format(filename))
+                with open(filename, 'wb') as f:
+                    pickle.dump(data[chunk*chunk_size:(chunk+1)*chunk_size], f)
+                    pickle.dump(labels[chunk*chunk_size:(chunk+1)*chunk_size],
+                                f)
+        else:
+            print('that is a fake save option')
 
-    if not save:
-        return (data[0:split], data[split:classes*omega],
-                labels[0:split], labels[split:classes*omega])
+    pct = 90
+    split = (omega*classes*pct)//100
+    return (data[0:split], data[split:classes*omega],
+            labels[0:split], labels[split:classes*omega])
 
 
 def combineData(x1, x2, y1, y2):
