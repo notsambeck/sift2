@@ -11,13 +11,18 @@ from kivy.properties import ObjectProperty
 from kivy.core.text import Label as CoreLabel
 import numpy as np
 import dataset
-from dataset import arr_y2r, idct, quantization, nextTransform
+from dataset import idct, quantization, get_transform
+from dataset import pil2net, make_arr, make_pil, dct_expand
 import pickle
 from PIL import Image
 import os
 import datetime
 
-# all important increment
+from sift_keras import model
+
+model.load_weights('net/keras_net_v0_2017aug7.h5')
+
+
 increment = 29177
 
 imageSize = 32  # number of 'pixels' in generated images
@@ -36,19 +41,18 @@ else:
 
 
 class SiftWidget(Widget):
-    counter = np.zeros((3, 32, 32), dtype='float32')
+    counter = np.zeros((32, 32, 3), dtype='float32')
     images_found = NumericProperty(0)
     images_shown = NumericProperty(0)
     prob = StringProperty()
     update_best = False
-    bestImage = np.zeros((3, imageSize, imageSize))
-    image = np.zeros((3, imageSize, imageSize))
+    bestImage = np.zeros((imageSize, imageSize, 3))
+    image = np.zeros((imageSize, imageSize, 3))
     bestLabel = CoreLabel(text='test', font_size=20, color=(1, 1, 1, .8))
     currentLabel = CoreLabel(text='test', font_size=20, color=(1, 1, 1, .8))
     bestTexture = ObjectProperty()
     currentTexture = ObjectProperty()
     texture_size = ObjectProperty()
-    directory = ""
 
     print("Initializing SIFT...")
     print('')
@@ -77,13 +81,16 @@ class SiftWidget(Widget):
                 print('saving to:', directory)
 
     def update(self, dt):
-        t = nextTransform(self.counter)
+        t = get_transform(self.counter)
         self.updateBest = False
         self.images_shown += 1
-        self.image = arr_y2r(idct(t))
-
+        im = make_pil(idct(t))
+        to_net = pil2net(im)  # in ycc format
+        self.image = make_arr(im, change_format_to='RGB')
+        p = model.predict(to_net)
+        self.prob = str(p[0, 1])
         # neural net section
-        if False:
+        if p[0, 1] >= .5:
             self.bestLabel.text = self.prob
             self.bestLabel.refresh()
             self.bestTexture = self.bestLabel.texture
@@ -99,7 +106,7 @@ class SiftWidget(Widget):
         self.counter = np.add(self.counter, increment)
         self.counter = np.mod(self.counter, quantization)
         self.canvas.clear()
-        self.showImage(.75)
+        self.showImage(1)
         self.showBest()
         if np.mod(self.images_shown, 10**4) == 0:
             print(self.images_shown, 'processed... saving to visualized.file')
@@ -112,7 +119,7 @@ class SiftWidget(Widget):
         with self.canvas:
             for j in range(imageSize):
                 for i in range(imageSize):
-                    pixel = np.clip(np.divide(self.image[:, j, i], 255.),
+                    pixel = np.clip(np.divide(self.image[j, i], 255.),
                                     0, 255)
                     Color(*pixel)
                     Rectangle(pos=(padX + i*scale,
@@ -135,7 +142,7 @@ class SiftWidget(Widget):
         with self.canvas:
             for j in range(imageSize):
                 for i in range(imageSize):
-                    pixel = self.bestImage[:, j, i]
+                    pixel = self.bestImage[j, i]
                     Color(*pixel)
                     Rectangle(pos=(2 * padX + (i + imageSize)*scale,
                                    padY + (imageSize-j)*scale),

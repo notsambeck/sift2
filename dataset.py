@@ -44,19 +44,19 @@ def expand(im):
     scale_x = 16
     newsize = scale_x * 32
 
-    tr = np.empty((3, 32, 32))
-    out = np.empty((3, newsize, newsize))
+    tr = np.empty((32, 32, 3))
+    out = np.empty((newsize, newsize, 3))
 
     for ch in range(3):
-        tr[ch] = scidct(scidct(im[ch], type=2, norm='ortho',
-                               axis=0),
-                        type=2, norm='ortho', axis=1)
-    tr_pad = np.zeros((3, newsize, newsize), dtype='float32')
-    tr_pad[:, :32, :32] = np.multiply(tr, scale_x)
+        tr[:, :, ch] = scidct(scidct(im[ch], type=2, norm='ortho',
+                                     axis=0),
+                              type=2, norm='ortho', axis=1)
+    tr_pad = np.zeros((newsize, newsize, 3), dtype='float32')
+    tr_pad[:32, :32] = np.multiply(tr, scale_x)
     for ch in range(3):
-        out[ch] = scidct(scidct(tr_pad[ch], type=3, norm='ortho',
-                                axis=0, n=newsize),
-                         type=3, norm='ortho', axis=1, n=newsize)
+        out[:, :, ch] = scidct(scidct(tr_pad[ch], type=3, norm='ortho',
+                                      axis=0, n=newsize),
+                               type=3, norm='ortho', axis=1, n=newsize)
 
     return np.clip(out, 0, 255)
 
@@ -307,7 +307,8 @@ def show_data(dataset, i=0):
 def pil2net(im, scale=127.5):
     if im.mode == 'RGB':
         im = im.convert('YCbCr')
-    arr = np.array(im)
+    arr = np.empty((1, 32, 32, 3))
+    arr[0] = np.array(im)
     return np.divide(np.subtract(arr, scale), scale)
 
 

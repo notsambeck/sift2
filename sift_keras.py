@@ -4,7 +4,7 @@ from keras.models import Sequential
 from keras.layers import Conv2D, MaxPooling2D, Flatten
 from keras.layers import Dropout, Dense, Activation
 import pickle
-# import h5py  # library needed; import probably is not
+# import h5py # library is needed; import is not
 
 model = Sequential()
 
