@@ -123,7 +123,7 @@ def load_cifar_transforms(filename='init_data'):
 
 # loads pre-pickled dataset of images. cmax is matrix of maximum
 # values of transform coefs, etc.  used in creating images
-cmax, cmean, cmin, cstd = loadCifarTransforms()
+cmax, cmean, cmin, cstd = load_cifar_transforms()
 
 
 # find std. deviation of each transform coefficient

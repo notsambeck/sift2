@@ -12,7 +12,7 @@ from kivy.core.text import Label as CoreLabel
 import numpy as np
 import dataset
 from dataset import idct, quantization, get_transform
-from dataset import pil2net, make_arr, make_pil, dct_expand
+from dataset import pil2net, make_arr, make_pil
 import pickle
 from PIL import Image
 import os
@@ -89,8 +89,11 @@ class SiftWidget(Widget):
         self.image = make_arr(im, change_format_to='RGB')
         p = model.predict(to_net)
         self.prob = str(p[0, 1])
+        self.currentLabel.text = self.prob
+        self.currentLabel.refresh()
+        self.currentTexture = self.currentLabel.texture
         # neural net section
-        if p[0, 1] >= .5:
+        if p[0, 1] >= p[0, 0]:
             self.bestLabel.text = self.prob
             self.bestLabel.refresh()
             self.bestTexture = self.bestLabel.texture

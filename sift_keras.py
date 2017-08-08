@@ -1,10 +1,11 @@
-# train model; this will go to train.py
+# load / train keras / tensorflow model
 import keras
 from keras.models import Sequential
 from keras.layers import Conv2D, MaxPooling2D, Flatten
 from keras.layers import Dropout, Dense, Activation
 import pickle
 # import h5py # library is needed; import is not
+
 
 model = Sequential()
 
@@ -28,7 +29,7 @@ model.add(Dropout(0.5))
 model.add(Dense(2))
 model.add(Activation('softmax'))
 
-opt = keras.optimizers.rmsprop(lr=0.001, decay=1e-6)
+opt = keras.optimizers.rmsprop(lr=0.0001, decay=1e-6)
 
 model.compile(loss='categorical_crossentropy',
               optimizer=opt,
@@ -39,8 +40,15 @@ savefile = 'net/keras_net_v0_2017aug7.h5'
 filelist = ['data/keras_dataset_300k_{}.pkl'.format(i) for i in range(9)]
 testfile = 'data/keras_dataset_300k_9.pkl'
 
+# model.load_weights(savefile)
 
-def train_net():
+
+def train_net(load=savefile):
+    if load:
+        try:
+            model.load_weights(load)
+        except:
+            print('WARNING: failed to load weights but will overwrite file')
     for epoch in range(100):
         for chunk in filelist:
             with open(chunk, 'rb') as f:
