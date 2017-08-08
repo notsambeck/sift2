@@ -106,7 +106,7 @@ def test_stored_transforms():
 def test_conversions(omega=3):
     print('\n running conversion tests...\n')
     # test import, convert to YCC, transform, revert
-    cifar = dataset.importCifar10()
+    cifar = dataset.importCifar10(howmany=1)
     print('Testing conversions.')
     errors = 0
     for i in range(omega):
@@ -114,6 +114,7 @@ def test_conversions(omega=3):
         errors += trinv(cifar, i)
 
     print('\n TOTAL ERRORS:', errors)
+    return cifar
 
 
 def test_generators(generator_function):

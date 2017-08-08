@@ -39,30 +39,23 @@ def idct(x):
 
 
 def expand(im):
-    '''expand takes a 32x32 image and expands it by DCT/iDCT
+    '''expand takes a 32x32x3 image and expands it by DCT/iDCT
     does not change colorspace'''
     scale_x = 16
     newsize = scale_x * 32
 
-    tr = np.empty((32, 32, 3))
-    out = np.empty((newsize, newsize, 3))
-
-    for ch in range(3):
-        tr[:, :, ch] = scidct(scidct(im[ch], type=2, norm='ortho',
-                                     axis=0),
-                              type=2, norm='ortho', axis=1)
+    tr = dct(im)
     tr_pad = np.zeros((newsize, newsize, 3), dtype='float32')
-    tr_pad[:32, :32] = np.multiply(tr, scale_x)
+    tr_pad[:32, :32, :] = np.multiply(tr, scale_x)
+
+    out = np.empty((newsize, newsize, 3), 'float32')
     for ch in range(3):
-        out[:, :, ch] = scidct(scidct(tr_pad[ch], type=3, norm='ortho',
-                                      axis=0, n=newsize),
-                               type=3, norm='ortho', axis=1, n=newsize)
+        out[:, :, ch] = scidct(scidct(tr_pad[:, :, ch], type=3, norm='ortho',
+                                      axis=0),
+                               type=3, norm='ortho', axis=1)
 
-    return np.clip(out, 0, 255)
+    return np.clip(out, 0, 255).astype('uint8')
 
-
-# optional tools for testing:
-# import matplotlib.pyplot as plt
 
 # omega is the number of samples to load or store in testing/training functions
 omega = 1000
@@ -115,7 +108,7 @@ def make_transforms(data='cifar'):
 # LOAD CIFAR TRANSFORMS from pickle made in makeTransforms:
 # Max, Mean, Min, Distribution = loadCifarTransforms() This should be
 # the only function needed in main app once the pickle is constructed.
-def loadCifarTransforms(filename='init_data'):
+def load_cifar_transforms(filename='init_data'):
     # cifar-100 filename including transforms: cifarTransforms.pkl
     with open(filename, 'rb') as f:
         # cifarTransforms = pickle.load(f)   # again, if you saved data
