@@ -245,14 +245,14 @@ def load_dataset(filename):
     return x, xt, y, yt
 
 
-# pull Nth image from CIFAR data and make  32, 32, 3 numpy.array 0-255 RGB
 def get_rgb_array(n, data):
+    '''Get Nth image from CIFAR data and make 32, 32, 3 np.ndarray 0-255 RGB'''
     arr = np.reshape(data[n], (3, 32, 32))
     return _reorder(arr)
 
 
 def _reorder(arr):
-    # reorder originial 0-255 (3, x, x) image to (x, x, 3) for PIL/NN
+    '''reorder originial 0-255 (3, x, x) image to (x, x, 3) for PIL/NN'''
     out = np.zeros((arr.shape[1], arr.shape[2], 3),
                    dtype='uint8')
     for i in range(3):
@@ -278,31 +278,39 @@ def make_arr(img, change_format_to=False):
 
 
 def arr_y2r(arr):
-    ''' take YCC array
+    ''' take YCC array 0-255
     return RGB array'''
     p = make_pil(np.clip(arr, 0, 255), output_format='RGB')
     return make_arr(p)
 
 
 def arr_r2y(arr):
-    ''' take rgb array;
+    ''' take rgb array 0-255;
     return ycc array'''
     p = make_pil(np.clip(arr, 0, 255), input_format='RGB')
     return make_arr(p)
 
 
 def show_data(dataset, i=0):
+    '''show_data(dataset, i=0) shows the Ith image from +/-1 dataset'''
     im = np.add(np.multiply(dataset[i], 127.5), 127.5)
     make_pil(np.clip(im, 0, 255).astype('uint8')).show()
 
 
-# convert from pil image to NN data +/- 1
 def pil2net(im, scale=127.5):
+    '''convert from any PIL image to NN data +/- 1'''
     if im.mode == 'RGB':
         im = im.convert('YCbCr')
-    arr = np.empty((1, 32, 32, 3))
+    arr = np.empty((1, 32, 32, 3), dtype='float32')
     arr[0] = np.array(im)
     return np.divide(np.subtract(arr, scale), scale)
+
+
+def net2pil(data, scale=127.5):
+    '''make PIL RGB image from neural net +/- 1 data'''
+    assert(data.shape == (32, 32, 3))
+    arr = np.add(np.multiply(data, scale), scale)
+    return make_pil(arr.astype('uint8'), output_format='RGB')
 
 
 # SIFT IMAGE (Transform) GENERATOR FUNCTIONS! #

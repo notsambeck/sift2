@@ -4,6 +4,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import dataset
+from sift_keras import model, savefile
+model.load_weights(savefile)
 
 
 def sigma_test(arr1, arr2, test_type, sigma):
@@ -44,7 +46,7 @@ def sigma_test(arr1, arr2, test_type, sigma):
 # convert back to RGB
 # show (optional)
 
-def trinv(data, i, show=1, sigma=10):
+def trinv(data, i, show=1, sigma=20):
     '''trinv is transform-inverse.
     takes: a dataset(4d image stack) and sigma=integer
     returns: sum of errors from sigma_tests of equality of input/output;
@@ -62,9 +64,36 @@ def trinv(data, i, show=1, sigma=10):
     # make initial PIL image;
     pil_in = dataset.make_pil(arr_in, input_format='RGB')
 
+    # make keras data:
+    # visual way:
+    pil_to_net = dataset.pil2net(pil_in)
+
+    # nonvisual way:
+    ycc_from_array = dataset.arr_r2y(arr_in)
+    if show > 1:
+        print('ycc_from_array:')
+        print(ycc_from_array[:, :, 0])
+
+    to_net = np.divide(np.subtract(ycc_from_array, 127.5), 127.5)
+    as_data = np.empty((1, 32, 32, 3), dtype='float32')
+    as_data[0] = to_net
+    if show > 1:
+        print('min, max = {}, {}'.format(to_net.min(), to_net.max()))
+        print('dtype =', to_net.dtype)
+        print(to_net[:, :, 0])
+
+    # run net on originial image
+    p = model.predict(as_data)
+    if show > 0:
+        print(p)
+    if p[0, 0] > p[0, 1]:
+        print('incorrect prediction on original image')
+        errors += 1000
+
+    errors += sigma_test(to_net, pil_to_net, 'two ways to make data', .01)
+
     # make a ycc version; by default make_arr preserves format
     ycc_from_image = dataset.make_arr(pil_in)
-    ycc_from_array = dataset.arr_r2y(arr_in)
     if show > 1:
         print('ycc arr: dtype = {}, Y channel ='.format(ycc_from_array.dtype))
         print(ycc_from_array[:, :, 0])
@@ -82,10 +111,34 @@ def trinv(data, i, show=1, sigma=10):
 
     errors += sigma_test(tr_inv_ycc, ycc_from_image, 'transform inversion', s)
 
+    to_net2 = np.divide(np.subtract(tr_inv_ycc, 127.5), 127.5)
+    as_data2 = np.empty((1, 32, 32, 3), dtype='float32')
+    as_data2[0] = to_net2
+    if show > 1:
+        print('min, max = {}, {}'.format(to_net.min(), to_net.max()))
+        print('dtype =', to_net2.dtype)
+        print(to_net2[:, :, 0])
+
+    # run net on capped image
+    p2 = model.predict(as_data2)
+    if show > 0:
+        print(p2)
+    if p2[0, 0] > p2[0, 1]:
+        print('incorrect prediction on capped image')
+        errors += 1000
+
     im_final = dataset.make_pil(tr_inv_ycc)
     arr_out = dataset.make_arr(im_final, change_format_to='RGB')
 
     errors += sigma_test(arr_out, arr_in, 'initial vs. final rgb', s)
+
+    from_net_im = dataset.net2pil(to_net)
+    from_net_arr = dataset.make_arr(from_net_im, change_format_to='RGB')
+    if show > 1:
+        print('from_net_arr:')
+        print(from_net_arr[:, :, 0])
+
+    errors += sigma_test(from_net_arr, arr_out, 'nn conversion out', s)
     # img_f.show()
     if (errors and show) or show > 1:
         pil_in.show()

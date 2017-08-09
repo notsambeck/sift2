@@ -1,23 +1,11 @@
-# lasagne/nolearn module for SiFT
-# Sift can call these functions
-# from here OK to use helper functions from dataset.py NOT OK to use
-# functions from sift.py see blog.christianperone.com - convolutional
-# neural networks blog post (2015)
-
-# GPU info from desktop:
+# GPU info from desktop
 # Hardware Class: graphics card
 # Model: "nVidia GF119 [GeForce GT 620 OEM]"
 # Vendor: pci 0x10de "nVidia Corporation"
 # Device: pci 0x1049 "GF119 [GeForce GT 620 OEM]"
 # SubVendor: pci 0x10de "nVidia Corporation"
 
-
 import numpy as np
-import lasagne
-from lasagne import layers
-from lasagne.updates import nesterov_momentum
-from nolearn.lasagne import NeuralNet
-from PIL import Image
 import os
 import datetime
 import pickle
@@ -25,6 +13,8 @@ import pickle
 # dataset is a sift module that imports CIFAR and provides
 # image transform functions and access to saved datasets/etc.
 import dataset
+import sift_keras
+from sift_keras import model
 
 twitter_mode = False
 if twitter_mode:
@@ -50,98 +40,51 @@ if twitter_mode:
 # optional functions for network visualization, debug
 '''
 import import_batch
-import theano
 import matplotlib.pyplot as plt
-from nolearn.lasagne import visualize
-from sklearn.metrics import classification_report
-from sklearn.metrics import confusion_matrix
 '''
 
-
-# call net.save_params_to('filename.pkl') to create & save file
-net = NeuralNet(
-    layers=[('input', layers.InputLayer),
-            ('conv2d1', layers.Conv2DLayer),
-            ('maxpool1', layers.MaxPool2DLayer),
-            ('conv2d2', layers.Conv2DLayer),
-            ('maxpool2', layers.MaxPool2DLayer),
-            ('conv2d3', layers.Conv2DLayer),
-            ('conv2d4', layers.Conv2DLayer),
-            ('dense1', layers.DenseLayer),
-            ('dropout1', layers.DropoutLayer),
-            ('dense2', layers.DenseLayer),
-            ('dropout2', layers.DropoutLayer),
-            ('dense3', layers.DenseLayer),
-            ('dropout3', layers.DropoutLayer),
-            ('output', layers.DenseLayer)],
-    input_shape=(None, 3, 32, 32),
-    conv2d1_num_filters=32,
-    conv2d1_filter_size=(5, 5),
-    conv2d1_nonlinearity=lasagne.nonlinearities.rectify,
-    maxpool1_pool_size=(2, 2),
-    conv2d2_num_filters=64,
-    conv2d2_filter_size=(4, 4),
-    conv2d2_nonlinearity=lasagne.nonlinearities.rectify,
-    maxpool2_pool_size=(2, 2),
-    conv2d3_num_filters=128,
-    conv2d3_filter_size=(2, 2),
-    conv2d3_nonlinearity=lasagne.nonlinearities.rectify,
-    conv2d4_num_filters=128,
-    conv2d4_filter_size=(2, 2),
-    conv2d4_nonlinearity=lasagne.nonlinearities.rectify,
-    conv2d4_W=lasagne.init.GlorotUniform(),
-    dense1_num_units=1024,
-    dense1_nonlinearity=lasagne.nonlinearities.rectify,
-    dropout1_p=0.5,
-    dense2_num_units=1024,
-    dense2_nonlinearity=lasagne.nonlinearities.rectify,
-    dropout2_p=0.5,
-    dense3_num_units=512,
-    dense3_nonlinearity=lasagne.nonlinearities.rectify,
-    dropout3_p=0.5,
-    output_nonlinearity=lasagne.nonlinearities.softmax,
-    output_num_units=3,
-    update=nesterov_momentum,
-    update_learning_rate=0.03,
-    update_momentum=.9,
-    max_epochs=1000,
-    verbose=2,
-    regression=False)
-
-# for automated load of net CURRENT WORKING NET abstract_V2.net
-net.load_params_from('170720_classification.nn')
-# net.load_params_from('abstract_v2.net')
-
-# do you want to train the network more? build a dataset & load here:
+# do you want to train the network more? load a dataset here:
 # import pickle
 # x, xt, y, yt = dataset.loadDataset('data/full_cifar_plus_161026.pkl')
 
 
-# how many images to store as array in RAM
-howManyToSave = 100000
-# saveEvery is how often to write progress
-saveEvery = 10**5
-batch = 1000
-# images are saved to .png by default, but also here
-found_images = np.zeros((howManyToSave, 3, 32, 32), 'uint8')
+model.load_weights(sift_keras.savefile)
+
+batch_size = 1000
+scale = 127.5  # scale factor for +/- 1
+
+
+def image_generator(increment, counter):
+    to_net = np.empty((batch_size, 32, 32, 3), 'float32')
+    for i in range(batch_size):
+        tr = dataset.get_transform(counter)
+        to_net[i] = dataset.idct(tr)  # ycc format
+        counter = np.mod(np.add(counter, increment), dataset.quantization)
+
+    to_net = np.divide(np.subtract(to_net, scale), scale)
+    print('batch stats: max={}, min={}'.format(to_net.max(), to_net.min()))
+    return to_net, counter
 
 
 # non-visualized Sift program.  Runs omega images then stops, counting by
 # increment. Net checks them, candidates are saved to a folder named
 # found_images/ -- today's date & increment -- / ####.png
-def Sift(increment=999, omega=10**10, classes=4, restart=False, saveAll=False):
-    images_found = 0
-    counter = np.zeros((3, 32, 32), dtype='float32')
-    images_saved = 0
-    print('Increment =', increment)
+def Sift(increment=999, restart=True):
 
     if not restart:
         print('Loading saved state...')
         f = open('save.file', 'rb')
         counter = pickle.load(f)
         images_found = pickle.load(f)
-        print('Images previously found:', images_found)
+        images_processed = pickle.load(f)
+        print('{} images found of {} processed'.format(images_found,
+                                                       images_processed))
         f.close()
+    else:
+        print('Warning: Restarting, will save over progress')
+        counter = np.zeros((32, 32, 3), dtype='float32')
+        images_found = 0
+        images_processed = 0
 
     # make dir found_images
     if not os.path.exists('found_images'):
@@ -152,54 +95,27 @@ def Sift(increment=999, omega=10**10, classes=4, restart=False, saveAll=False):
         os.makedirs(directory)
     print('saving to', directory)
 
-    for i in range(1, omega//batch):  # run omega/batch batches
-        # save progress
-        if np.mod(i, saveEvery//batch) == 0:
-            print('\n', i*batch, 'processed... saving progress to save.file')
-            f = open('save.file', 'wb')
-            pickle.dump(counter, f)
-            pickle.dump(images_found, f)
-            f.close()
+    processed = 0
+    # for rep in range(1):
+    while True:  # MAIN LOOP
+        print('processed {} batches of size {}'.format(processed, batch_size))
+        processed += 1
+        data, counter = image_generator(increment, counter)
+        ps = model.predict_on_batch(data)
 
-        if i % (saveEvery // batch // 50) == 1:
-            progress = i % (saveEvery // batch)*50 // (saveEvery // batch)
-            print('|{}{}| % of {}'.format('!'*progress,
-                                          '_'*(50-progress),
-                                          saveEvery),
-                  end='\r')
-
-        # create transforms; save batches of images as image and net obj.
-        toNet = np.zeros((batch, 3, 32, 32), dtype='float32')
-        images = np.zeros((batch, 3, 32, 32), dtype='float32')
-        ts = np.zeros((batch, 3, 32, 32), dtype='float32')
-        for im in range(batch):
-            ts[im] = dataset.nextTransformAdjustable(counter)
-            images[im] = dataset.arr_y2r(dataset.idct(ts[im]))
-            toNet[im] = np.divide(np.subtract(images[im], 128.), 128.)
-            counter = np.mod(np.add(counter, increment), dataset.quantization)
-
-        p = net.predict(toNet)
-        for im in range(batch):
-            if p[im] >= 1:
-                print('Class', p[im], 'image found:', images_found)
-                # s = Image.fromarray(dataset.orderPIL(images[im]))
-                s = dataset.make_pil(images[im], output_format='RGB')
-                saveName = ''.join([str(images_found),
-                                    '_class-',
-                                    str(p[im]),
-                                    '.png'])
-                s.save(''.join([directory, '/', saveName]))
+        for i in range(batch_size):
+            if ps[i, 1] > ps[i, 0]:
                 images_found += 1
-
-                large = np.zeros((3, 512, 512))
-                large[:, :32, :32] = ts[im]
-                large = dataset.idct_expand(large)
-                large_image = dataset.make_pil(large, output_format='RGB')
-                large_image.save('twitter.png')
+                print('Image found: no.', images_found)
+                # s = Image.fromarray(dataset.orderPIL(images[im]))
+                s = dataset.net2pil(data[i])
+                f = ''.join([str(images_found), '_', str(ps[i, 1]), '.png'])
+                s.save(''.join([directory, '/', f]))
+                s.resize((512, 512)).save('twitter.png')
 
                 # tweet it
                 if twitter_mode:
-                    with open(''.join([directory, '/', saveName]), 'rb') as tw:
+                    with open(''.join([directory, '/', f]), 'rb') as tw:
                         content = tw.read()
                         try:
                             bad = ['computer wallpaper',
@@ -211,7 +127,8 @@ def Sift(increment=999, omega=10**10, classes=4, restart=False, saveAll=False):
                             goog = vision_client.image(content=content)
                             labels = goog.detect_labels()
                             ds = ['#'+label.description.replace(' ', '')
-                                  for label in labels if label.description not in bad]
+                                  for label in labels
+                                  if label.description not in bad]
                             tweet = '''IMAGE LOCATED. #{}
 {}'''.format(str(images_found), ' '.join(ds))
                             if len(tweet) > 125:
@@ -225,91 +142,17 @@ def Sift(increment=999, omega=10**10, classes=4, restart=False, saveAll=False):
                     except:
                         print('Tweet failed')
 
-            if saveAll:
-                s = Image.fromarray(dataset.orderPIL(images[im]))
-                s.save(''.join([directory, '/',
-                                str(images_saved),
-                                '.png']))
-                images_saved += 1
-
-    print('Sifted through', omega, 'images and saved', images_found)
-
-
-# check against validation set, optionally save miscategorized images
-def check_accuracy(x, y, save=False):
-    if y.ndim != 1:
-        return 'fail - check_accuracy is for binary classification only'
-
-    # if save=True, make directory for image files
-    if save:
-        if not os.path.exists('incorrect'):
-            os.makedirs('incorrect')
-        directory = "".join(['incorrect/', str(datetime.date.today())])
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-        print('saving miscategorized images to:', directory)
-
-    t = ['true', 0]
-    fp = ['false_pos', 0]
-    fn = ['false_neg', 0]
-    omega = y.shape[-1]
-    p = net.predict(x)
-    for i in range(omega):
-        if (p[i]) == y[i]:
-            t[1] += 1
-        else:
-            if save:
-                s = dataset.toPIL(x[i])
-                s.save(''.join([directory, '/', str(i),
-                                '_T-', str(y[i]),
-                                '_P-', str(p[i]), '.png']))
-            if y[i] == 0:
-                fp[1] += 1
-            else:
-                fn[1] += 1
-    print('Of', omega, 'examples:')
-    for thing in [t, fp, fn]:
-        print(thing[0], ':', thing[1], '=', str(thing[1]/omega*100), '%')
-
-
-# check against validation set, optionally save miscategorized images
-def check_accuracy_vector(x, y, save=False):
-    if y.ndim != 2:
-        return 'FAIL - check_accuracy(x,y) is for binary classification only'
-
-    # if save=True, make directory for image files
-    if save:
-        if not os.path.exists('incorrect'):
-            os.makedirs('incorrect')
-        directory = "".join(['incorrect/', str(datetime.date.today())])
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-        print('saving miscategorized images to:', directory)
-
-    t = ['true', 0]
-    fp = ['false_pos', 0]
-    fn = ['false_neg', 0]
-    omega = y.shape[-1]
-    p = net.predict(x)
-    for i in range(omega):
-        if dataset.vec2int(p[i]) == dataset.vec2int(y[i]):
-            t[1] += 1
-        else:
-            if save:
-                s = dataset.toPIL(x[i])
-                s.save(''.join([directory, '/', str(i),
-                                '_T-', str(dataset.vec2int(y[i])), '.png']))
-            if dataset.vec2int(y[i]) == 0:
-                fp[1] += 1
-            else:
-                fn[1] += 1
-    print('Of', omega, 'examples:')
-    for thing in [t, fp, fn]:
-        print(thing[0], ':', thing[1], '=', str(thing[1]/omega*100), '%')
+                # save progress
+        print('saving progress to save.file')
+        f = open('save.file', 'wb')
+        pickle.dump(counter, f)
+        pickle.dump(images_found, f)
+        f.close()
 
 
 if __name__ == '__main__':
     print()
-    print('SIFTnonvisual loaded. Twitter={}. For visuals, run sift.py.'.format(twitter_mode))
+    print('SIFTnonvisual loaded. Twitter={}. For visuals, run sift.py.'
+          .format(twitter_mode))
     print()
     Sift()
