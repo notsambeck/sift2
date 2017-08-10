@@ -62,29 +62,29 @@ def image_generator(increment, counter):
         counter = np.mod(np.add(counter, increment), dataset.quantization)
 
     to_net = np.divide(np.subtract(to_net, scale), scale)
-    print('batch stats: max={}, min={}'.format(to_net.max(), to_net.min()))
+    # print('batch stats: max={}, min={}'.format(to_net.max(), to_net.min()))
     return to_net, counter
 
 
 # non-visualized Sift program.  Runs omega images then stops, counting by
 # increment. Net checks them, candidates are saved to a folder named
 # found_images/ -- today's date & increment -- / ####.png
-def Sift(increment=999, restart=True):
+def Sift(increment=999, restart=False):
 
     if not restart:
         print('Loading saved state...')
         f = open('save.file', 'rb')
         counter = pickle.load(f)
         images_found = pickle.load(f)
-        images_processed = pickle.load(f)
+        processed = pickle.load(f)
         print('{} images found of {} processed'.format(images_found,
-                                                       images_processed))
+                                                       processed))
         f.close()
     else:
         print('Warning: Restarting, will save over progress')
         counter = np.zeros((32, 32, 3), dtype='float32')
         images_found = 0
-        images_processed = 0
+        processed = 0
 
     # make dir found_images
     if not os.path.exists('found_images'):
@@ -95,7 +95,6 @@ def Sift(increment=999, restart=True):
         os.makedirs(directory)
     print('saving to', directory)
 
-    processed = 0
     # for rep in range(1):
     while True:  # MAIN LOOP
         print('processed {} batches of size {}'.format(processed, batch_size))
@@ -142,12 +141,14 @@ def Sift(increment=999, restart=True):
                     except:
                         print('Tweet failed')
 
-                # save progress
-        print('saving progress to save.file')
-        f = open('save.file', 'wb')
-        pickle.dump(counter, f)
-        pickle.dump(images_found, f)
-        f.close()
+        # save progress
+        if processed % 100 == 0:
+            print('saving progress to save.file')
+            f = open('save.file', 'wb')
+            pickle.dump(counter, f)
+            pickle.dump(images_found, f)
+            pickle.dump(processed, f)
+            f.close()
 
 
 if __name__ == '__main__':
