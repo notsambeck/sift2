@@ -4,16 +4,21 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import dataset
-from sift_keras import model, savefile
-model.load_weights(savefile)
+import timeit
+
+test_model = False
+if test_model:
+    from sift_keras import model, savefile
+    model.load_weights(savefile)
 
 
 def sigma_test(arr1, arr2, test_type, sigma):
     '''test equality of 2 arrays within +/- sigma per element
     takes arr1, arr2, test_type (string for printout only) and sigma
-    returns 1 if ~=, 0 if !='''
+    returns errors: 0 if ~=, 1 if !='''
 
-    if arr1.all() == arr2.all():
+    if (arr1 == arr2).all():
+        print('perfect')
         return(0)
 
     # if not identical:
@@ -34,8 +39,33 @@ def sigma_test(arr1, arr2, test_type, sigma):
         if count > 0:
             print('errors found: {} for sigma = {} ?'.format(test_type, sigma))
             print('num. elements outside sigma: {}'.format(count))
-            return 1
+            return count
     return 0
+
+
+def test_dcts():
+    x = np.multiply(np.random.rand(32, 32, 3), 255)
+    setup = '''
+import dataset
+import numpy as np
+x = np.random.rand(32, 32, 3)
+t = dataset.alt_dct(x)
+'''
+    time1 = timeit.timeit('t1 = dataset.dct(x)', setup=setup, number=1000)
+    time2 = timeit.timeit('t2 = dataset.alt_dct(x)', setup=setup, number=1000)
+    print('time1: {}, time2: {}'.format(time1, time2))
+    t1 = dataset.dct(x)
+    t2 = dataset.alt_dct(x)
+    print(sigma_test(t1, t2, 'test different dcts', 0.0001))
+
+    itime1 = timeit.timeit('dataset.idct(t)', setup=setup, number=1000)
+    itime2 = timeit.timeit('dataset.alt_idct(t)', setup=setup, number=1000)
+    print('itime1: {}, itime2: {}'.format(itime1, itime2))
+    x1 = dataset.dct(t1)
+    x2 = dataset.alt_dct(t1)
+    print(sigma_test(x1, x2, 'test different dcts', 0.001))
+
+    return x, t1, t2
 
 
 # transform / inverse tests
@@ -47,7 +77,7 @@ def sigma_test(arr1, arr2, test_type, sigma):
 # show (optional)
 
 def trinv(data, i, show=1, sigma=20):
-    '''trinv is transform-inverse.
+    '''trinv is transform-inverse pair test.
     takes: a dataset(4d image stack) and sigma=integer
     returns: sum of errors from sigma_tests of equality of input/output;
     0 if !=, 1 if ~=
@@ -82,13 +112,14 @@ def trinv(data, i, show=1, sigma=20):
         print('dtype =', to_net.dtype)
         print(to_net[:, :, 0])
 
-    # run net on originial image
-    p = model.predict(as_data)
-    if show > 0:
-        print(p)
-    if p[0, 0] > p[0, 1]:
-        print('incorrect prediction on original image')
-        errors += 1000
+    if test_model:
+        # run net on originial image
+        p = model.predict(as_data)
+        if show > 0:
+            print(p)
+        if p[0, 0] > p[0, 1]:
+            print('incorrect prediction on original image')
+            errors += 1000
 
     errors += sigma_test(to_net, pil_to_net, 'two ways to make data', .01)
 
@@ -119,13 +150,14 @@ def trinv(data, i, show=1, sigma=20):
         print('dtype =', to_net2.dtype)
         print(to_net2[:, :, 0])
 
-    # run net on capped image
-    p2 = model.predict(as_data2)
-    if show > 0:
-        print(p2)
-    if p2[0, 0] > p2[0, 1]:
-        print('incorrect prediction on capped image')
-        errors += 1000
+    if test_model:
+        # run net on capped image
+        p2 = model.predict(as_data2)
+        if show > 0:
+            print(p2)
+        if p2[0, 0] > p2[0, 1]:
+            print('incorrect prediction on capped image')
+            errors += 1000
 
     im_final = dataset.make_pil(tr_inv_ycc)
     arr_out = dataset.make_arr(im_final, change_format_to='RGB')
