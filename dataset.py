@@ -44,8 +44,9 @@ def old_idct(x):
 
 
 def idct(x):
-    return scidct(scidct(x, type=3, norm='ortho', axis=0),
-                  type=3, norm='ortho', axis=1).astype('uint8')
+    return np.clip(scidct(scidct(x, type=3, norm='ortho', axis=0),
+                          type=3, norm='ortho', axis=1),
+                   0, 255).astype('uint8')
 
 
 def expand(im):
