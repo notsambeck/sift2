@@ -8,6 +8,7 @@
 import numpy as np
 import os
 import datetime
+import time
 import pickle
 
 # dataset is a sift module that imports CIFAR and provides
@@ -71,6 +72,8 @@ def image_generator(increment, counter):
 # found_images/ -- today's date & increment -- / ####.png
 def Sift(increment=999, restart=False):
 
+    last = time.time()
+
     if not restart:
         print('Loading saved state...')
         f = open('save.file', 'rb')
@@ -105,12 +108,17 @@ def Sift(increment=999, restart=False):
         for i in range(batch_size):
             if ps[i, 1] > ps[i, 0]:
                 images_found += 1
-                print('Image found: no.', images_found)
+                now = time.time()
+                print('Image found: no.', images_found, ' at ', now)
                 # s = Image.fromarray(dataset.orderPIL(images[im]))
                 s = dataset.net2pil(data[i])
                 f = ''.join([str(images_found), '_', str(ps[i, 1]), '.png'])
                 s.save(''.join([directory, '/', f]))
-                s.resize((512, 512)).save('twitter.png')
+
+                if now - last > 3:  # only save after > 3 seconds
+                    last = now
+                    print('wallpaper')
+                    s.resize((512, 512)).save('twitter.png')
 
                 # tweet it
                 if twitter_mode:
