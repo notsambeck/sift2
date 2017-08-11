@@ -6,7 +6,6 @@ import numpy as np
 import pickle
 from PIL import Image
 from scipy.fftpack import dct as scidct
-import tensorflow as tf
 
 
 np.set_printoptions(precision=1, suppress=True, linewidth=200,
@@ -72,51 +71,7 @@ def expand(im):
 omega = 1000
 
 
-def make_transforms(data='cifar'):
-    '''makeTransforms produces statistics about an image dataset (eg CIFAR)
-    and a 4-d array of all their transforms for analysis / plotting.
-    once assembled, you can load this pickle instead of rebuilding it
-    '''
-    shape = (32, 32, 3)
-    if data == 'cifar':
-        data = np.concatenate((importCifar10(), importCifar100()), axis=0)
-    print(data.shape)
-
-    # initialize result arrays:
-    cifarMaxTransform = np.multiply(np.ones(shape, dtype='float32'), -100000)
-    cifarMinTransform = np.multiply(np.ones(shape, dtype='float32'), 100000)
-    total = np.zeros(shape, dtype='float32')
-
-    # format: RGB transforms stacked numberOfImages deep
-    cifarTransforms = np.zeros((len(data), 32, 32, 3),
-                               dtype='float32')
-
-    # loop through CIFAR images
-    for i in range(len(data)):
-        rgb = get_rgb_array(i, data)
-        ycc = arr_r2y(rgb)
-        transform = np.ndarray(shape, dtype='float32')
-        transform = dct(ycc)
-        cifarMaxTransform = np.maximum(cifarMaxTransform, transform)
-        cifarMinTransform = np.minimum(cifarMinTransform, transform)
-        total = np.add(total, transform)
-        cifarTransforms[i] = transform
-        pct = i/len(data)*100
-        if round(pct) == pct:
-            print('{} %'.format(pct), end='\r')
-    cifarMeanTransform = np.divide(total, len(data))
-    with open('init_data', 'wb') as out:
-        cstd = getStdDev(cifarTransforms)
-
-        # pickle.dump(cifarTransforms, out)    # if you want to save all data
-        pickle.dump(cifarMaxTransform, out)
-        pickle.dump(cifarMinTransform, out)
-        pickle.dump(cifarMeanTransform, out)
-        pickle.dump(cstd, out)
-    return cifarTransforms
-
-
-# LOAD CIFAR TRANSFORMS from pickle made in makeTransforms:
+# LOAD CIFAR TRANSFORMS from pickle made in import_batch.makeTransforms:
 # Max, Mean, Min, Distribution = loadCifarTransforms() This should be
 # the only function needed in main app once the pickle is constructed.
 def load_cifar_transforms(filename='init_data'):
@@ -135,55 +90,6 @@ def load_cifar_transforms(filename='init_data'):
 # loads pre-pickled dataset of images. cmax is matrix of maximum
 # values of transform coefs, etc.  used in creating images
 cmax, cmean, cmin, cstd = load_cifar_transforms()
-
-
-# find std. deviation of each transform coefficient
-def getStdDev(transformArray):
-    out = np.zeros((32, 32, 3), dtype='float32')
-    for row in range(32):
-        for col in range(32):
-            for ch in range(3):
-                out[row, col, ch] = transformArray[:, row, col, ch].std()
-    return out
-
-
-# import RGB CIFAR100 batch file of 50k images
-# google cifar for this and cifar10 dataset
-def importCifar100():
-    # cifar-100 is 1 file
-    with open('data/cifar_raw_data/cifar100.pkl', 'rb') as fo:
-        u = pickle._Unpickler(fo)
-        u.encoding = 'Latin1'
-        cifar_data = u.load()
-
-    cifar = cifar_data['data']
-    print('Imported dataset: Cifar100.')
-    print('Samples: {}, shape: {}, datarange: {} to {}.'.format(len(cifar),
-                                                                cifar.shape,
-                                                                cifar.min(),
-                                                                cifar.max()))
-    return cifar
-
-
-# import RGB CIFAR10 batch files of 10k images
-# return 3072 x n np.array in range 0-255
-# NEEDS TO BE SCALED to +/- 1
-def importCifar10(howmany=5):
-    # cifar 10 data in batches 1-5
-    cifar10 = np.zeros((10000*howmany, 3072), dtype='uint8')
-    for i in range(1, howmany+1):
-        name = ''.join(['data/cifar_raw_data/data_batch_', str(i)])
-        with open(name, 'rb') as f:
-            u = pickle._Unpickler(f)
-            u.encoding = 'Latin1'
-            cifar_data = u.load()
-        cifar10[(i-1)*10000:i*10000] = cifar_data['data']
-    print('Imported dataset: Cifar10')
-    print('Samples: {}, shape: {}, datarange: {} to {}.'.format(len(cifar10),
-                                                                cifar10.shape,
-                                                                cifar10.min(),
-                                                                cifar10.max()))
-    return cifar10
 
 
 # QUANTIZATION #
@@ -305,7 +211,7 @@ def arr_r2y(arr):
 def show_data(dataset, i=0):
     '''show_data(dataset, i=0) shows the Ith image from +/-1 dataset'''
     im = np.add(np.multiply(dataset[i], 127.5), 127.5)
-    make_pil(np.clip(im, 0, 255).astype('uint8')).show()
+    make_pil(np.clip(im, 0, 255).astype('uint8'), output_format='RGB').show()
 
 
 def pil2net(im, scale=127.5):
@@ -371,123 +277,3 @@ def random_transform(mean=cmean, std_dev=cstd, sigma=1):
                              size=(32, 32, 3))
     out = np.add(mean, np.multiply(std_dev, rando))
     return out
-
-
-# make dataset
-def _int64_feature(value):
-    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
-
-
-def _bytes_feature(value):
-    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
-
-
-def build_dataset(omega, lowest=lowest, highest=highest, save=False, name=''):
-    '''build_dataset makes a training set in YCbCr format.
-    generates omega * classes length set
-    all data are scaled to +/- 1'''
-    cifar = np.append(importCifar10(), importCifar100(), axis=0)
-    # make_pil(get_rgb_array(0, cifar), input_format='RGB').show()
-    # make_pil(get_rgb_array(50001, cifar), input_format='RGB').show()
-    print('resources loaded')
-
-    classes = 3
-    data = np.empty((classes*omega, 32, 32, 3), dtype='float32')
-    labels = np.empty(classes*omega, dtype='uint8')
-    count = np.zeros((32, 32, 3), dtype='float32')
-
-    for i in range(omega):
-        rgb = get_rgb_array(i, cifar)
-        ycc = arr_r2y(rgb)
-        tr = dct(ycc)
-        capped = np.clip(tr, lowest, highest)
-        data[i] = idct(capped)
-        labels[i] = 1
-
-        ycc_random = random_transform()
-        data[omega+i] = idct(ycc_random)
-        labels[omega+i] = 0
-
-        count = np.add(count, 42566)
-        count = np.mod(count, quantization)
-        data[2*omega+i] = idct(get_transform(count))
-        labels[2*omega+i] = 0
-        if i % (omega // 100) == 0:
-            print('{} %'.format(i * 100 / omega), end='\r')
-
-    for e in data:
-        e = np.multiply(1 + np.random.randn()/10, e)
-
-    print('Input data range: min: {}, max: {}'.format(data.min(), data.max()))
-
-    np.clip(data, 0.0, 255.0, out=data)
-    # scale to +/- 1
-    data = np.subtract(data, 127.5)
-    print('centered')
-    data = np.divide(data, 127.5)
-    print('normalized;')
-    print('output data range: min: {}, max: {}'.format(data.min(), data.max()))
-    print('labels: # positive examples: {}'.format(sum(labels)))
-
-    # shuffle data
-    state = np.random.get_state()
-    np.random.shuffle(data)
-    np.random.set_state(state)
-    np.random.shuffle(labels)
-
-    if save == 'pkl':
-        # data broken up to x% / 100-x% to use as desired:
-        split = round(.9*classes*omega)
-        save_dataset(''.join([name, '.pkl']),
-                     data[0:split], data[split:classes*omega],
-                     labels[0:split], labels[split:classes*omega])
-
-    chunks = 10
-    chunk_size = len(data) // chunks
-    if save:
-        if save == 'tfrecord':
-            for chunk in range(chunks):
-                filename = ''.join(['data/', name, '_', str(chunk), '.tfrec'])
-                print('writing tfrecord to {}'.format(filename))
-                writer = tf.python_io.TFRecordWriter(filename)
-            for i in range(chunk_size):
-                image_raw = data[chunk*chunk_size + i].tostring()
-                example = tf.train.Example(features=tf.train.Features(feature={
-                    'height': _int64_feature(32),
-                    'width': _int64_feature(32),
-                    'depth': _int64_feature(3),
-                    'label': _int64_feature(int(labels[i])),
-                    'image_raw': _bytes_feature(image_raw)}))
-                writer.write(example.SerializeToString())
-                writer.close()
-        elif save == 'pkl':
-            for chunk in range(chunks):
-                filename = ''.join(['data/', name, '_', str(chunk), '.pkl'])
-                print('writing tfrecord to {}'.format(filename))
-                with open(filename, 'wb') as f:
-                    pickle.dump(data[chunk*chunk_size:(chunk+1)*chunk_size], f)
-                    pickle.dump(labels[chunk*chunk_size:(chunk+1)*chunk_size],
-                                f)
-        else:
-            print('that is a fake save option')
-
-    pct = 90
-    split = (omega*classes*pct)//100
-    return (data[0:split], data[split:classes*omega],
-            labels[0:split], labels[split:classes*omega])
-
-
-def combineData(x1, x2, y1, y2):
-    if x1.max() != x2.max():
-        raise ValueError('different dtypes in data to combine')
-    x = np.zeros((x1.shape[0]+x2.shape[0], 3, 32, 32), dtype='float32')
-    y = np.zeros(x1.shape[0]+x2.shape[0], dtype='uint8')
-    x[:x1.shape[0]] = x1
-    x[x1.shape[0]:] = x2
-    y[:x1.shape[0]] = y1
-    y[x1.shape[0]:] = y2
-    state = np.random.get_state()
-    np.random.shuffle(x)
-    np.random.set_state(state)
-    np.random.shuffle(y)
-    return x, y
