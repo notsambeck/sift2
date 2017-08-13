@@ -7,7 +7,7 @@ import pickle
 
 class Dataset():
     '''Dataset is an np.ndarray, shape = (omega, 32, 32, 3)
-    Images are stored in YCrCb format, scaled to +/- 1 values.
+    Images are stored in YCbCr format, scaled to +/- 1 values.
     '''
     def __init__(self, omega, shape=(32, 32, 3), size=(32, 32)):
         self.data = np.empty((omega, shape[0], shape[1], shape[2]),
@@ -34,12 +34,14 @@ class Dataset():
         o = self.count
         for f in all_files:
             if f[-4:] == '.png' or f[-4:] == '.jpg':
+                if self.full:
+                    break
                 image = Image.open('/'.join([filepath, f]))
                 self.add(image, label)
                 files_added += 1
-        print('loaded {} files of {} => {} images'.format(files_added,
-                                                          len(all_files),
-                                                          self.count - o))
+        print('loaded {} files of {} objs; =>{} images'.format(files_added,
+                                                               len(all_files),
+                                                               self.count - o))
 
     def _ftd_add(self, frmtd, label):
         ''' adds PIL image to dataset if formatted, do not call directly'''
@@ -47,37 +49,66 @@ class Dataset():
             print('sorry, dataset is full')
             return False
         if frmtd.size != self.size:
-            raise ValueError('image not correctly formatted')
-        self.data[self.count] = dataset.pil2net(frmtd)[0]  # pil2net is 4d
-        self.labels[self.count] = label
-        self.count += 1
-        self.just_shuffled = False
+            raise ValueError('image not correctly formatted for size')
+        if frmtd.mode != 'YCbCr':
+            frmtd = frmtd.convert('YCbCr')
+        try:
+            self.data[self.count] = dataset.pil2net(frmtd)[0]  # pil2net is 4d
+            self.labels[self.count] = label
+            self.count += 1
+            self.just_shuffled = False
+        except:
+            ValueError('dimensions wrong; skip')
+            print(frmtd)
         if self.count == self.omega:
             print('warning! at capacity')
             self.full = True
 
     def add(self, image, label):
-        '''call this to add any PIL image to dataset'''
-        if image.mode != 'YCbCr':
-            image.convert('YCbCr')
-
+        '''adds a PIL image to dataset'''
         # size conditionals
         if image.size == self.size:
             self._ftd_add(image, label)
         elif image.size[0] < 32 or image.size[1] < 32:
+            print('too small; skip')
             return False
+        elif image.size[0] < 64 or image.size[1] < 64:
+            self._ftd_add(image.resize((32, 32)))
         else:
-            self.fragment_add(image, label)
+            self._fragment_add(image, label)
 
-    def fragment_add(self, image, label):
-        '''breaks up a large image, adds to dataset w/ overlapping windows'''
+    def _fragment_add(self, image, label):
+        '''breaks up a large image, adds to dataset '''
         w, h = image.size
-        cols = w // 16
-        rows = h // 16
-        image = image.resize(w * 16, h * 16)
-        for r in (rows - 1):
-            for c in (cols - 1):
-                self._ftd_add(image.crop(c*32, r*32, (c + 1)*32, (r + 1)*32))
+        if image.mode != 'YCbCr':
+            image = image.convert('YCbCr')
+        if w >= 1.5 * h:    # horizontal
+            cols = 3
+            rows = 2
+        elif h >= 1.5 * w:  # vertical
+            cols = 2
+            rows = 3
+        else:
+            cols = 2
+            rows = 2
+        image = image.resize((cols * 32, rows * 32))
+        for r in range(rows):
+            for c in range(cols):
+                orig = image.crop((c*32, r*32, (c + 1)*32,
+                                   (r + 1)*32))
+                capped = self._cap(orig)
+                self._ftd_add(orig, 1)
+                self._ftd_add(capped, 1)
+
+    def _cap(self, image):
+        '''takes a PIL YCC image; returns that same image capped'''
+        if image.mode != 'YCbCr':
+            raise ValueError(image.mode)
+        ycc_arr = dataset.make_arr(image)
+        tr = dataset.dct(ycc_arr)
+        capped_tr = np.clip(tr, dataset.lowest, dataset.highest)
+        capped_ycc_arr = dataset.idct(capped_tr)
+        return dataset.make_pil(capped_ycc_arr)
 
     def add_cifar(self, qty=100000):
         '''adds CIFAR images (default qty=1000000) to dataset, capped/orig'''
@@ -87,16 +118,12 @@ class Dataset():
         for i in range(qty):
             rgb = dataset.get_rgb_array(i, cifar)
             ycc = dataset.make_pil(rgb, input_format='RGB')
-            ycc_arr = dataset.make_arr(ycc)
+            capped = self._cap(ycc)
             if i % 2 == 1:
                 ycc = ycc.transpose(Image.FLIP_LEFT_RIGHT)
-            self.add(ycc, 1)
-            tr = dataset.dct(ycc_arr)
-            capped_tr = np.clip(tr, dataset.lowest, dataset.highest)
-            capped_ycc_arr = dataset.idct(capped_tr)
-            capped = dataset.make_pil(capped_ycc_arr)
-            if i % 2 == 0:
+            else:
                 capped = capped.transpose(Image.FLIP_LEFT_RIGHT)
+            self.add(ycc, 1)
             self.add(capped, 1)
 
     def add_generated(self, qty, increment=999):
@@ -114,12 +141,12 @@ class Dataset():
         for e in self.data:
             e = np.multiply(1 + np.random.randn()/10, e)
 
-    def shuffle_data(self, test=30):
+    def shuffle(self, test=30):
         # shuffle data
         state = np.random.get_state()
         np.random.shuffle(self.data[:self.count])
         np.random.set_state(state)
-        np.random.shuffle(self.labels[self.count])
+        np.random.shuffle(self.labels[:self.count])
         self.just_shuffled = True
         if test:
             self.visual_test(test)
@@ -131,9 +158,9 @@ class Dataset():
             dataset.show_data(self.data, i)
             print(self.labels[i])
 
-    def save_dataset(self, filename, chunks=10):
+    def save_dataset(self, filename, chunks=10, confirm=True):
         # data broken into chunks:
-        if not self.just_shuffled:
+        if confirm and not self.just_shuffled:
             print('dataset not shuffled')
             return False
         print('min = {}, max = {}'.format(self.data.min(), self.data.max()))
