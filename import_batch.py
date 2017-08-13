@@ -19,29 +19,13 @@ class Dataset():
         self.size = size
         self.full = False
         self.just_shuffled = False
+        self.display = 5   # show self.display samples from each action
 
     def __str__(self):
         return 'Dataset of len {} filled to {}'.format(self.omega, self.count)
 
     def __repr__(self):
         return str(self)
-
-    def add_dir(self, filepath, label):
-        '''takes a directory and adds a stack of PIL images to data
-        lable = 1 for image, 0 for non-image'''
-        all_files = os.listdir(filepath)
-        files_added = 0
-        o = self.count
-        for f in all_files:
-            if f[-4:] == '.png' or f[-4:] == '.jpg':
-                if self.full:
-                    break
-                image = Image.open('/'.join([filepath, f]))
-                self.add(image, label)
-                files_added += 1
-        print('loaded {} files of {} objs; =>{} images'.format(files_added,
-                                                               len(all_files),
-                                                               self.count - o))
 
     def _ftd_add(self, frmtd, label):
         ''' adds PIL image to dataset if formatted, do not call directly'''
@@ -110,6 +94,24 @@ class Dataset():
         capped_ycc_arr = dataset.idct(capped_tr)
         return dataset.make_pil(capped_ycc_arr)
 
+    def add_dir(self, filepath, label):
+        '''takes a directory and adds a stack of PIL images to data
+        lable = 1 for image, 0 for non-image'''
+        all_files = os.listdir(filepath)
+        files_added = 0
+        o = self.count
+        for f in all_files:
+            if f[-4:] in ['.png', '.jpg', '.PNG', '.JPG', 'JPEG']:
+                if self.full:
+                    break
+                image = Image.open('/'.join([filepath, f]))
+                self.add(image, label)
+                files_added += 1
+        print('loaded {} files of {} objs; =>{} images'.format(files_added,
+                                                               len(all_files),
+                                                               self.count - o))
+        self.visual_test()
+
     def add_cifar(self, qty=100000):
         '''adds CIFAR images (default qty=1000000) to dataset, capped/orig'''
         print('loading cifar datasets...')
@@ -125,6 +127,7 @@ class Dataset():
                 capped = capped.transpose(Image.FLIP_LEFT_RIGHT)
             self.add(ycc, 1)
             self.add(capped, 1)
+        self.visual_test()
 
     def add_generated(self, qty, increment=999):
         '''generates and adds transforms'''
@@ -133,32 +136,39 @@ class Dataset():
             count = np.add(count, increment)
             count = np.mod(count, dataset.quantization)
             ycc = dataset.idct(dataset.get_transform(count))
-            self.add(dataset.make_pil(ycc, 0))  # label is zero
+            self.add(dataset.make_pil(ycc), 0)  # label is zero
             if i % (qty // 100) == 0:
                 print('{} %'.format(i * 100 / qty), end='\r')
+        self.visual_test()
 
     def random_levels(self):
+        self.visual_test()
+        input('press enter to randomize levels')
         for e in self.data:
-            e = np.multiply(1 + np.random.randn()/10, e)
+            e = np.multiply(1 + np.random.randn()/6, e)
+            np.clip(e, -1, 1, out=e)
+        self.visual_test()
 
-    def shuffle(self, test=30):
+    def shuffle(self):
         # shuffle data
         state = np.random.get_state()
         np.random.shuffle(self.data[:self.count])
         np.random.set_state(state)
         np.random.shuffle(self.labels[:self.count])
         self.just_shuffled = True
-        if test:
-            self.visual_test(test)
+        self.visual_test()
 
-    def visual_test(self, test):
-        if self.count < test:
-            test = self.count
-        for i in range(test):
+    def visual_test(self):
+        '''show last self.display images in data'''
+        # show self.display images unless not that many are available.
+        display = min(self.count, self.display)
+        for i in range(self.count - display, self.count):
             dataset.show_data(self.data, i)
-            print(self.labels[i])
+            print(i, '=>', self.labels[i])
 
     def save_dataset(self, filename, chunks=10, confirm=True):
+        if '.' in filename:
+            raise NameError('filename has _no.pkl added automatically.')
         # data broken into chunks:
         if confirm and not self.just_shuffled:
             print('dataset not shuffled')
@@ -169,9 +179,9 @@ class Dataset():
                                                                  chunk_size,
                                                                  self.count))
         for chunk in range(chunks):
-            fp = ''.join(['data/', filename, '_', str(chunk), '.pkl'])
-            print('writing pkl to {}'.format(fp))
-            with open(filename, 'wb') as f:
+            filepath = ''.join(['data/', filename, '_', str(chunk), '.pkl'])
+            print('writing pkl to {}'.format(filepath))
+            with open(filepath, 'wb') as f:
                 pickle.dump(self.data[chunk*chunk_size:(chunk+1)*chunk_size],
                             f)
                 pickle.dump(self.labels[chunk*chunk_size:(chunk+1)*chunk_size],
