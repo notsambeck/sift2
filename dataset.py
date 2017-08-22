@@ -49,7 +49,8 @@ def idct(x):
 
 
 def expand(im):
-    '''expand takes a 32x32x3 image and expands it by DCT/iDCT
+    '''expand takes a 32x32x3 ndarray image and expands it by DCT/iDCT
+    scale contrast to full range
     does not change colorspace'''
     scale_x = 16
     newsize = scale_x * 32
@@ -63,6 +64,10 @@ def expand(im):
         out[:, :, ch] = scidct(scidct(tr_pad[:, :, ch], type=3, norm='ortho',
                                       axis=0),
                                type=3, norm='ortho', axis=1)
+
+    lo = out[0].min()
+    hi = out[0].max()
+    out[0] = np.multiply(np.subtract(out[0], lo), 255 / (hi - lo))
 
     return np.clip(out, 0, 255).astype('uint8')
 

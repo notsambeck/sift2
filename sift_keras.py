@@ -4,6 +4,7 @@ from keras.models import Sequential
 from keras.layers import Conv2D, MaxPooling2D, Flatten
 from keras.layers import Dropout, Dense, Activation
 import pickle
+import dataset
 # import h5py # library is needed; import is not
 
 
@@ -35,22 +36,32 @@ model.compile(loss='categorical_crossentropy',
               optimizer=opt,
               metrics=['accuracy'])
 
+orig_data = 'data/keras_dataset_300k_{}.pkl'   # 0-9
+import_batch_dset1 = 'data/import_batch_20170813_{}.pkl'  # 0-9
 
 savefile = 'net/keras_net_v0_2017aug7.h5'
-filelist = ['data/keras_dataset_300k_{}.pkl'.format(i) for i in range(9)]
-testfile = 'data/keras_dataset_300k_9.pkl'
+filelist1 = [import_batch_dset1.format(i) for i in range(9)]
+filelist2 = [orig_data.format(i) for i in range(10)]
+testfile = 'data/import_batch_20170813_9.pkl'  # 0-9
 
-# model.load_weights(savefile)
+filelist = filelist1[:4] + filelist2[:5] + filelist1[4:] + filelist2[5:]
+model.load_weights(savefile)
 
 
 def train_net(load=savefile):
+    '''train_net loads parameters from savefile by default,
+    and then trains 100 epochs on multi-file dataset
+    specified by filelist'''
     if load:
         try:
             model.load_weights(load)
         except:
             print('WARNING: failed to load weights but will overwrite file')
-    for epoch in range(100):
-        for chunk in filelist:
+    else:
+        print('warning: not saving progress.')
+    print()
+    for epoch in range(1000):
+        for chunk in filelist1:
             with open(chunk, 'rb') as f:
                 x = pickle.load(f)
                 y = pickle.load(f)
@@ -69,4 +80,30 @@ def train_net(load=savefile):
             y = keras.utils.to_categorical(y, 2)
         e = model.evaluate(x, y, batch_size=2000)
         print(e)
-        model.save(savefile)
+        model.save(load)
+
+
+def predict_and_show_incorrect(filename=testfile, limit=100):
+    with open(filename, 'rb') as f:
+        x = pickle.load(f)
+        y = pickle.load(f)  # integer 0/1
+
+    prs = model.predict(x)
+
+    incorrect = 0
+    for i in range(len(prs)):
+        if prs[i, 0] > prs[i, 1]:   # predict 0
+            p = 0
+        else:
+            p = 1
+
+        if p != y[i]:
+            incorrect += 1
+            dataset.show_data(x, i=i)
+            input('prediction = {}'.format(p))
+
+        if incorrect == limit:
+            return 'limit reached at i={}'.format(i)
+
+    return 'of {} images, {} incorrect predictions'.format(len(prs),
+                                                           incorrect)

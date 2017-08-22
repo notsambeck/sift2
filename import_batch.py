@@ -66,23 +66,23 @@ class Dataset():
         w, h = image.size
         if image.mode != 'YCbCr':
             image = image.convert('YCbCr')
-        if w >= 1.5 * h:    # horizontal
-            cols = 3
-            rows = 2
-        elif h >= 1.5 * w:  # vertical
-            cols = 2
-            rows = 3
+        if w >= 1.3 * h:    # horizontal
+            cols = 6
+            rows = 4
+        elif h >= 1.3 * w:  # vertical
+            cols = 4
+            rows = 6
         else:
-            cols = 2
-            rows = 2
+            cols = 4
+            rows = 4
         image = image.resize((cols * 32, rows * 32))
         for r in range(rows):
             for c in range(cols):
                 orig = image.crop((c*32, r*32, (c + 1)*32,
                                    (r + 1)*32))
                 capped = self._cap(orig)
-                self._ftd_add(orig, 1)
-                self._ftd_add(capped, 1)
+                self._ftd_add(orig, label)
+                self._ftd_add(capped, label)
 
     def _cap(self, image):
         '''takes a PIL YCC image; returns that same image capped'''
@@ -91,19 +91,22 @@ class Dataset():
         ycc_arr = dataset.make_arr(image)
         tr = dataset.dct(ycc_arr)
         capped_tr = np.clip(tr, dataset.lowest, dataset.highest)
-        capped_ycc_arr = dataset.idct(capped_tr)
+        capped_ycc_arr = np.clip(dataset.idct(capped_tr), 0, 255)
         return dataset.make_pil(capped_ycc_arr)
 
     def add_dir(self, filepath, label):
         '''takes a directory and adds a stack of PIL images to data
-        lable = 1 for image, 0 for non-image'''
+        automatically adds capped & non-capped versions for non-32x32 images
+        label = 1 for image, 0 for non-image'''
         all_files = os.listdir(filepath)
+        print('dir contains {} files, label={}'.format(len(all_files), label))
         files_added = 0
         o = self.count
         for f in all_files:
+            print('{} %'.format(files_added/len(all_files)*100), end='\r')
+            if self.full:
+                break
             if f[-4:] in ['.png', '.jpg', '.PNG', '.JPG', 'JPEG']:
-                if self.full:
-                    break
                 image = Image.open('/'.join([filepath, f]))
                 self.add(image, label)
                 files_added += 1
@@ -118,6 +121,8 @@ class Dataset():
         cifar = np.append(importCifar10(), importCifar100(), axis=0)
         print('done')
         for i in range(qty):
+            if i % 1000 == 0:
+                print('{} %'.format(i/qty*100), end='\r')
             rgb = dataset.get_rgb_array(i, cifar)
             ycc = dataset.make_pil(rgb, input_format='RGB')
             capped = self._cap(ycc)
@@ -145,7 +150,7 @@ class Dataset():
         self.visual_test()
         input('press enter to randomize levels')
         for e in self.data:
-            e = np.multiply(1 + np.random.randn()/6, e)
+            e = np.multiply(1 + np.random.randn()/4, e)
             np.clip(e, -1, 1, out=e)
         self.visual_test()
 

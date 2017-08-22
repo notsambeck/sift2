@@ -17,7 +17,7 @@ import dataset
 import sift_keras
 from sift_keras import model
 
-twitter_mode = False
+twitter_mode = True
 if twitter_mode:
     from google.cloud import vision
     vision_client = vision.Client()
@@ -44,14 +44,14 @@ import import_batch
 import matplotlib.pyplot as plt
 '''
 
-# do you want to train the network more? load a dataset here:
+# do you want to train the network? load a dataset:
 # import pickle
 # x, xt, y, yt = dataset.loadDataset('data/full_cifar_plus_161026.pkl')
 
 
 model.load_weights(sift_keras.savefile)
 
-batch_size = 1000
+batch_size = 1000  # over 2000 kills desktop
 scale = 127.5  # scale factor for +/- 1
 
 
@@ -67,12 +67,12 @@ def image_generator(increment, counter):
     return to_net, counter
 
 
-# non-visualized Sift program.  Runs omega images then stops, counting by
-# increment. Net checks them, candidates are saved to a folder named
-# found_images/ -- today's date & increment -- / ####.png
 def Sift(increment=999, restart=False):
+    '''non-visualized Sift program.  Runs omega images then stops, counting by
+    increment. Net checks them, candidates are saved to a folder named
+    found_images/ -- today's date & increment -- / ####.png '''
 
-    last = time.time()
+    last = 0
 
     if not restart:
         print('Loading saved state...')
@@ -115,39 +115,85 @@ def Sift(increment=999, restart=False):
                 f = ''.join([str(images_found), '_', str(ps[i, 1]), '.png'])
                 s.save(''.join([directory, '/', f]))
 
-                if now - last > 3:  # only save after > 3 seconds
-                    last = now
-                    print('wallpaper')
-                    s.resize((512, 512)).save('twitter.png')
+                if now - last > 30:  # only tweet after > 30 seconds
+                    # s.resize((512, 512)).save('twitter.png')
+                    arr = dataset.make_arr(s)
+                    x = dataset.expand(arr)
+                    xim = dataset.make_pil(x, input_format='RGB',
+                                           output_format='RGB')
+                    xim.save('twitter.png')
 
-                # tweet it
-                if twitter_mode:
-                    with open(''.join([directory, '/', f]), 'rb') as tw:
-                        content = tw.read()
-                        try:
-                            bad = ['computer wallpaper',
-                                   'pattern',
-                                   'texture',
-                                   'font',
-                                   'text',
-                                   'line']
-                            goog = vision_client.image(content=content)
-                            labels = goog.detect_labels()
-                            ds = ['#'+label.description.replace(' ', '')
-                                  for label in labels
-                                  if label.description not in bad]
-                            tweet = '''IMAGE LOCATED. #{}
+                    # tweet it
+                    if twitter_mode:
+                        with open(''.join([directory, '/', f]), 'rb') as tw:
+                            content = tw.read()
+                            try:
+                                bad = ['computer wallpaper',
+                                       'pattern',
+                                       'texture',
+                                       'font',
+                                       'text',
+                                       'line',
+                                       'atmosphere',
+                                       'close up',
+                                       'closeup',
+                                       'atmosphere of earth',
+                                       'grass family',
+                                       'black',
+                                       'blue',
+                                       'purple',
+                                       'green',
+                                       'material']
+                                goog = vision_client.image(content=content)
+                                labels = goog.detect_labels()
+                                ds = ['#'+label.description.replace(' ', '')
+                                      for label in labels
+                                      if label.description not in bad]
+
+                            except ValueError:
+                                print('Google api failed, tweeting anyway')
+                                tweet = '''#DEFINITELY #FOUND #AN #IMAGE.
+#painting #notapainting #art #notart'''
+
+                        # skip boring images
+                        boring = ['#green', '#blue', '#black', '#grass',
+                                  '#sky', '#purple', '#pink', '#light',
+                                  'white', '#phenomenon', '#tree', '#water',
+                                  '#plant', '#tree', '#macrophotography',
+                                  '#cloud', '#plantstem', '#leaf', '#skin',
+                                  '#flora']
+                        if all([d in boring for d in ds]):
+                            print('boring image, not tweeting it.')
+                            continue
+
+                        # different kinds of tweets
+                        bot = i % 10
+                        if bot == 1:
+                            ds.append('@pixelsorter')
+                        elif bot < 9:
+                            my_fs = api.followers()
+                            u = my_fs[np.random.randint(0, len(my_fs))]
+                            u_fs = api.followers(u.screen_name)
+                            usr = u_fs[np.random.randint(0, len(u_fs))]
+                            at = usr.screen_name
+                            ds = ['@{} IS THIS YOUR IMAGE?'
+                                  .format(at)] + ds
+                        else:
+                            ds.append('#art #contemporaryart #notart')
+
+                        # make tweet, cap length
+                        tweet = '''IMAGE FOUND. #{}
 {}'''.format(str(images_found), ' '.join(ds))
-                            if len(tweet) > 125:
-                                tweet = tweet[:105]
-                        except:
-                            print('Google api failed')
-                            tweet = '#DEFINITE #LOCATE #IMAGE. #SIFT.'
+                        if len(tweet) > 125:
+                            tweet = tweet[:105]
 
-                    try:
-                        api.update_with_media('twitter.png', tweet)
-                    except:
-                        print('Tweet failed')
+                        try:
+                            print('tweeting:', tweet)
+                            api.update_with_media('twitter.png', tweet)
+                            last = now
+
+                        except:
+                            print('Tweet failed')
 
         # save progress
         if processed % 100 == 0:
