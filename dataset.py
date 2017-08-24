@@ -48,26 +48,27 @@ def idct(x):
                    0, 255).astype('uint8')
 
 
-def expand(im):
+def expand(im, scale_x=2):
     '''expand takes a 32x32x3 ndarray image and expands it by DCT/iDCT
     scale contrast to full range
     does not change colorspace'''
-    scale_x = 16
     newsize = scale_x * 32
 
     tr = dct(im)
     tr_pad = np.zeros((newsize, newsize, 3), dtype='float32')
     tr_pad[:32, :32, :] = np.multiply(tr, scale_x)
 
+    lo = np.amin(tr[:, :, 0])
+    # print(lo)
+    hi = np.amax(tr[:, :, 0])
+    # print(hi)
+    tr[:, :, 0] = np.multiply(np.subtract(tr[:, :, 0], lo), 255/(hi - lo))
+
     out = np.empty((newsize, newsize, 3), 'float32')
     for ch in range(3):
         out[:, :, ch] = scidct(scidct(tr_pad[:, :, ch], type=3, norm='ortho',
                                       axis=0),
                                type=3, norm='ortho', axis=1)
-
-    lo = out[0].min()
-    hi = out[0].max()
-    out[0] = np.multiply(np.subtract(out[0], lo), 255 / (hi - lo))
 
     return np.clip(out, 0, 255).astype('uint8')
 

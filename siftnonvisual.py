@@ -55,6 +55,37 @@ batch_size = 1000  # over 2000 kills desktop
 scale = 127.5  # scale factor for +/- 1
 
 
+bad_wd = ['computer wallpaper',
+          'pattern',
+          'texture',
+          'font',
+          'text',
+          'line',
+          'atmosphere',
+          'close up',
+          'closeup',
+          'atmosphere of earth',
+          'grass family',
+          'black',
+          'blue',
+          'purple',
+          'green',
+          'material',
+          'phenomenon',
+          'grass']
+
+boring = ['#green', '#blue', '#black', '#grass',
+          '#purple', '#pink', '#light', '#sky',
+          '#white', '#phenomenon', '#tree', '#water',
+          '#plant', '#tree', '#macrophotography',
+          '#cloud', '#plantstem', '#leaf', '#skin',
+          '#flora', '#photography', '#mouth']
+
+bonus = ['#art', '#contemporaryart', '#painting', '#notart',
+         '#abstract', '#abstractart', '#contemporaryphotography',
+         '#conceptualartist', '#snapchat', '#sift']
+
+
 def image_generator(increment, counter):
     to_net = np.empty((batch_size, 32, 32, 3), 'float32')
     for i in range(batch_size):
@@ -98,9 +129,11 @@ def Sift(increment=999, restart=False):
         os.makedirs(directory)
     print('saving to', directory)
 
+    # MAIN LOOP
     # for rep in range(1):
-    while True:  # MAIN LOOP
-        print('processed {} batches of size {}'.format(processed, batch_size))
+    while True:
+        if processed % 10 == 0:
+            print('processed {} batches of {}'.format(processed, batch_size))
         processed += 1
         data, counter = image_generator(increment, counter)
         ps = model.predict_on_batch(data)
@@ -113,7 +146,7 @@ def Sift(increment=999, restart=False):
                 # s = Image.fromarray(dataset.orderPIL(images[im]))
                 s = dataset.net2pil(data[i])
                 f = ''.join([str(images_found), '_', str(ps[i, 1]), '.png'])
-                s.save(''.join([directory, '/', f]))
+                s.save(os.path.join(directory, f))
 
                 if now - last > 30:  # only tweet after > 30 seconds
                     # s.resize((512, 512)).save('twitter.png')
@@ -121,56 +154,48 @@ def Sift(increment=999, restart=False):
                     x = dataset.expand(arr)
                     xim = dataset.make_pil(x, input_format='RGB',
                                            output_format='RGB')
-                    xim.save('twitter.png')
+                    xim.resize((512, 512)).save('twitter.png')
 
-                    # tweet it
+                    # twitter module
                     if twitter_mode:
-                        with open(''.join([directory, '/', f]), 'rb') as tw:
+                        with open(os.path.join(directory, f), 'rb') as tw:
                             content = tw.read()
                             try:
-                                bad = ['computer wallpaper',
-                                       'pattern',
-                                       'texture',
-                                       'font',
-                                       'text',
-                                       'line',
-                                       'atmosphere',
-                                       'close up',
-                                       'closeup',
-                                       'atmosphere of earth',
-                                       'grass family',
-                                       'black',
-                                       'blue',
-                                       'purple',
-                                       'green',
-                                       'material']
                                 goog = vision_client.image(content=content)
                                 labels = goog.detect_labels()
-                                ds = ['#'+label.description.replace(' ', '')
-                                      for label in labels
-                                      if label.description not in bad]
+                                labels = [label for label in labels
+                                          if label.description not in bad_wd]
 
-                            except ValueError:
-                                print('Google api failed, tweeting anyway')
+                                # num = labels[0].score
+                                # word = labels[0].description
+                                # print(word, num)
+
+                                ds = ['#'+label.description.replace(' ', '')
+                                      for label in labels]
+
+                            except:
+                                print('Google api failed, not tweeting')
+                                continue   # or tweet without this continue
                                 tweet = '''#DEFINITELY #FOUND #AN #IMAGE.
 #painting #notapainting #art #notart'''
 
                         # skip boring images
-                        boring = ['#green', '#blue', '#black', '#grass',
-                                  '#sky', '#purple', '#pink', '#light',
-                                  'white', '#phenomenon', '#tree', '#water',
-                                  '#plant', '#tree', '#macrophotography',
-                                  '#cloud', '#plantstem', '#leaf', '#skin',
-                                  '#flora']
-                        if all([d in boring for d in ds]):
+                        if all([d in boring for d in ds]) or \
+                           (ds[0] in boring and labels[0].score < .98):
                             print('boring image, not tweeting it.')
+                            print('_'.join(ds))
                             continue
 
                         # different kinds of tweets
-                        bot = i % 10
-                        if bot == 1:
+                        bot = i % 100
+                        if bot <= 5:
                             ds.append('@pixelsorter')
-                        elif bot < 9:
+
+                        elif 5 < bot <= 10:
+                            ds.append('@WordPadBot')
+
+                        elif bot == 99:
+                            # spam mode
                             my_fs = api.followers()
                             u = my_fs[np.random.randint(0, len(my_fs))]
                             u_fs = api.followers(u.screen_name)
@@ -178,14 +203,17 @@ def Sift(increment=999, restart=False):
                             at = usr.screen_name
                             ds = ['@{} IS THIS YOUR IMAGE?'
                                   .format(at)] + ds
+
                         else:
-                            ds.append('#art #contemporaryart #notart')
+                            for _ in range(3):
+                                r = np.random.randint(0, len(bonus))
+                                ds.append(bonus[r])
 
                         # make tweet, cap length
                         tweet = '''IMAGE FOUND. #{}
 {}'''.format(str(images_found), ' '.join(ds))
-                        if len(tweet) > 125:
-                            tweet = tweet[:105]
+                        if len(tweet) > 130:
+                            tweet = tweet[:110]
 
                         try:
                             print('tweeting:', tweet)

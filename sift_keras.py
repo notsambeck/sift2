@@ -100,7 +100,7 @@ def predict_and_show_incorrect(filename=testfile, limit=100):
         if p != y[i]:
             incorrect += 1
             dataset.show_data(x, i=i)
-            input('prediction = {}'.format(p))
+            input('prediction = {}    press enter'.format(p))
 
         if incorrect == limit:
             return 'limit reached at i={}'.format(i)

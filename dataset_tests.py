@@ -1,10 +1,14 @@
 # test dataset conversion functions
 # also includes histograms, assorted non-core data tools
 
+import dataset
+import import_batch
+
 import numpy as np
 import matplotlib.pyplot as plt
-import dataset
 import timeit
+from google.cloud import vision
+vc = vision.Client()
 
 test_model = False
 if test_model:
@@ -191,7 +195,7 @@ def test_stored_transforms():
 def test_conversions(omega=3):
     print('\n running conversion tests...\n')
     # test import, convert to YCC, transform, revert
-    cifar = dataset.importCifar10(howmany=1)
+    cifar = import_batch.importCifar10(howmany=1)
     print('Testing conversions.')
     errors = 0
     for i in range(omega):
@@ -200,6 +204,21 @@ def test_conversions(omega=3):
 
     print('\n TOTAL ERRORS:', errors)
     return cifar
+
+
+def test_vision():
+    cifar = import_batch.importCifar10(howmany=1)
+    for i in range(10):
+        im = dataset.get_rgb_array(i*100, cifar)
+        xim = dataset.expand(im)
+        pil = dataset.make_pil(xim, input_format='RGB', output_format='RGB')
+        pil.save('.f.png')
+        with open('.f.png', 'rb') as f:
+            content = f.read()
+            goog = vc.image(content=content)
+            labels = goog.detect_labels()
+        ds = [label.description + str(label.score) for label in labels]
+        print(' '.join(ds))
 
 
 def test_generators(generator_function):
