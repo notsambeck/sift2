@@ -71,7 +71,7 @@ def train_net(load=savefile):
             if len(y.shape) == 1:
                 y = keras.utils.to_categorical(y, 2)
 
-            model.fit(x, y, epochs=1, batch_size=2000)
+            model.fit(x, y, epochs=1, batch_size=1000)
 
         print('trained epoch {}; testing...'.format(epoch))
         with open(testfile, 'rb') as f:

@@ -98,7 +98,7 @@ def image_generator(increment, counter):
     return to_net, counter
 
 
-def Sift(increment=999, restart=False):
+def Sift(increment=11999, restart=False):
     '''non-visualized Sift program.  Runs omega images then stops, counting by
     increment. Net checks them, candidates are saved to a folder named
     found_images/ -- today's date & increment -- / ####.png '''
@@ -107,18 +107,27 @@ def Sift(increment=999, restart=False):
 
     if not restart:
         print('Loading saved state...')
-        f = open('save.file', 'rb')
-        counter = pickle.load(f)
-        images_found = pickle.load(f)
-        processed = pickle.load(f)
-        print('{} images found of {} processed'.format(images_found,
-                                                       processed))
-        f.close()
+        try:
+            f = open('save.file', 'rb')
+            counter = pickle.load(f)
+            images_found = pickle.load(f)
+            processed = pickle.load(f)
+            tweeted = pickle.load(f)
+            print('{} images found of {} processed; tweeted {}.'
+                  .format(images_found, processed*batch_size, tweeted))
+            f.close()
+        except FileNotFoundError:
+            print('save.file does not exist. RESTARTING')
+            counter = np.zeros((32, 32, 3), dtype='float32')
+            images_found = 0
+            processed = 0
+            tweeted = 0
     else:
         print('Warning: Restarting, will save over progress')
         counter = np.zeros((32, 32, 3), dtype='float32')
         images_found = 0
         processed = 0
+        tweeted = 0
 
     # make dir found_images
     if not os.path.exists('found_images'):
@@ -219,6 +228,7 @@ def Sift(increment=999, restart=False):
                             print('tweeting:', tweet)
                             api.update_with_media('twitter.png', tweet)
                             last = now
+                            tweeted += 1
 
                         except:
                             print('Tweet failed')
@@ -230,6 +240,7 @@ def Sift(increment=999, restart=False):
             pickle.dump(counter, f)
             pickle.dump(images_found, f)
             pickle.dump(processed, f)
+            pickle.dump(tweeted, f)
             f.close()
 
 
