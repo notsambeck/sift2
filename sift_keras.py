@@ -3,8 +3,10 @@ import keras
 from keras.models import Sequential
 from keras.layers import Conv2D, MaxPooling2D, Flatten
 from keras.layers import Dropout, Dense, Activation
+from numpy.random import permutation
 import pickle
 import dataset
+import os
 # import h5py # library is needed; import is not
 
 
@@ -56,12 +58,14 @@ def train_net(load=savefile):
         try:
             model.load_weights(load)
         except:
-            print('WARNING: failed to load weights but will overwrite file')
+            input('WARNING: failed to load weights but will overwrite file {}'
+                  .format(savefile))
     else:
-        print('warning: not saving progress.')
+        print('WARNING: not saving progress.')
+
     print()
     for epoch in range(1000):
-        for chunk in filelist1:
+        for chunk in permutation(filelist1):
             with open(chunk, 'rb') as f:
                 x = pickle.load(f)
                 y = pickle.load(f)
@@ -71,7 +75,7 @@ def train_net(load=savefile):
             if len(y.shape) == 1:
                 y = keras.utils.to_categorical(y, 2)
 
-            model.fit(x, y, epochs=1, batch_size=1000)
+            model.fit(x, y, epochs=3, batch_size=1000)
 
         print('trained epoch {}; testing...'.format(epoch))
         with open(testfile, 'rb') as f:
@@ -83,7 +87,7 @@ def train_net(load=savefile):
         model.save(load)
 
 
-def predict_and_show_incorrect(filename=testfile, limit=100):
+def predict_incorrect(filename=testfile, limit=100, output='save'):
     with open(filename, 'rb') as f:
         x = pickle.load(f)
         y = pickle.load(f)  # integer 0/1
@@ -99,8 +103,13 @@ def predict_and_show_incorrect(filename=testfile, limit=100):
 
         if p != y[i]:
             incorrect += 1
-            dataset.show_data(x, i=i)
-            input('prediction = {}    press enter'.format(p))
+            if output == 'show':
+                dataset.show_data(x, i=i)
+                input('prediction = {}    press enter'.format(p))
+            elif output == 'save':
+                im = dataset.net2pil(x[i])
+                filename = ''.join([str(y[i]), 'miscat', str(i), '.png'])
+                im.save(os.path.join('incorrect/keras', str(y[i]), filename))
 
         if incorrect == limit:
             return 'limit reached at i={}'.format(i)

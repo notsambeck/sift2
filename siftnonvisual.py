@@ -72,18 +72,21 @@ bad_wd = ['computer wallpaper',
           'green',
           'material',
           'phenomenon',
-          'grass']
+          'grass',
+          'pink',
+          'yellow']
 
 boring = ['#green', '#blue', '#black', '#grass',
           '#purple', '#pink', '#light', '#sky',
           '#white', '#phenomenon', '#tree', '#water',
           '#plant', '#tree', '#macrophotography',
           '#cloud', '#plantstem', '#leaf', '#skin',
-          '#flora', '#photography', '#mouth']
+          '#flora', '#photography', '#mouth',
+          '#nose', '#yellow']
 
 bonus = ['#art', '#contemporaryart', '#painting', '#notart',
          '#abstract', '#abstractart', '#contemporaryphotography',
-         '#conceptualartist', '#snapchat', '#sift']
+         '#conceptualart', '#snapchat', '#sift']
 
 
 def image_generator(increment, counter):
@@ -202,6 +205,9 @@ def Sift(increment=11999, restart=False):
 
                         elif 5 < bot <= 10:
                             ds.append('@WordPadBot')
+
+                        elif 10 < bot < 15:
+                            ds.append('@poem_exe TOPIC FOR POEM')
 
                         elif bot == 99:
                             # spam mode
