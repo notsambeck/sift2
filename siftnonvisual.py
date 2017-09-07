@@ -74,7 +74,15 @@ bad_wd = ['computer wallpaper',
           'phenomenon',
           'grass',
           'pink',
-          'yellow']
+          'yellow',
+          'wood',
+          'white',
+          'violet',
+          'lilac',
+          'lavender',
+          'brown',
+          'magenta',
+          'angle']
 
 boring = ['#green', '#blue', '#black', '#grass',
           '#purple', '#pink', '#light', '#sky',
@@ -82,11 +90,13 @@ boring = ['#green', '#blue', '#black', '#grass',
           '#plant', '#tree', '#macrophotography',
           '#cloud', '#plantstem', '#leaf', '#skin',
           '#flora', '#photography', '#mouth',
-          '#nose', '#yellow']
+          '#nose', '#yellow', '#lilac', '#lavender',
+          '#violet', '#face', "#photography", '#petal',
+          '#eye', '#face', '#blackandwhite', '#sunlight']
 
-bonus = ['#art', '#contemporaryart', '#painting', '#notart',
-         '#abstract', '#abstractart', '#contemporaryphotography',
-         '#conceptualart', '#snapchat', '#sift']
+bonus = ['#art', '#contemporaryart', '#painting', '#notart', '#botally',
+         '#abstract', '#abstractart', '#photograph', '#notaphotograph',
+         '#conceptualart', '#sift', '#notapainting']
 
 
 def image_generator(increment, counter):
@@ -144,7 +154,7 @@ def Sift(increment=11999, restart=False):
     # MAIN LOOP
     # for rep in range(1):
     while True:
-        if processed % 10 == 0:
+        if processed % 50 == 0:
             print('processed {} batches of {}'.format(processed, batch_size))
         processed += 1
         data, counter = image_generator(increment, counter)
@@ -193,21 +203,24 @@ def Sift(increment=11999, restart=False):
 
                         # skip boring images
                         if all([d in boring for d in ds]) or \
-                           (ds[0] in boring and labels[0].score < .98):
+                           (ds[0] in boring and labels[0].score < .9):
                             print('boring image, not tweeting it.')
                             print('_'.join(ds))
                             continue
 
                         # different kinds of tweets
                         bot = i % 100
-                        if bot <= 5:
+                        if bot <= 3:
                             ds.append('@pixelsorter')
 
-                        elif 5 < bot <= 10:
+                        elif bot <= 8:
                             ds.append('@WordPadBot')
 
-                        elif 10 < bot < 15:
+                        elif bot < 12:
                             ds.append('@poem_exe TOPIC FOR POEM')
+
+                        elif bot < 15:
+                            ds.append('@a_quilt_bot')
 
                         elif bot == 99:
                             # spam mode
@@ -241,7 +254,7 @@ def Sift(increment=11999, restart=False):
 
         # save progress
         if processed % 100 == 0:
-            print('saving progress to save.file')
+            # print('saving progress to save.file')
             f = open('save.file', 'wb')
             pickle.dump(counter, f)
             pickle.dump(images_found, f)
