@@ -11,6 +11,7 @@ import datetime
 import time
 import pickle
 import requests
+import json
 
 # dataset is a sift module that imports CIFAR and provides
 # image transform functions and access to saved datasets/etc.
@@ -30,7 +31,7 @@ vision_client = vision.Client()
 
 siftapp_mode = True
 
-twitter_mode = False
+twitter_mode = True
 
 if twitter_mode:
     # secret.py is in .gitignore, stores twitter login keys as str
@@ -63,7 +64,7 @@ batch_size = 1000  # over 2000 kills desktop
 scale = 127.5  # scale factor for +/- 1
 
 
-banned = ['computer wallpaper',
+banned = ['computerwallpaper',
           'pattern',
           'texture',
           'font',
@@ -72,8 +73,8 @@ banned = ['computer wallpaper',
           'atmosphere',
           'close up',
           'closeup',
-          'atmosphere of earth',
-          'grass family',
+          'atmosphereofearth',
+          'grassfamily',
           'black',
           'blue',
           'purple',
@@ -92,23 +93,60 @@ banned = ['computer wallpaper',
           'magenta',
           'angle']
 
-boring = ['#green', '#blue', '#black', '#grass',
-          '#purple', '#pink', '#light', '#sky',
-          '#white', '#phenomenon', '#tree', '#water',
-          '#plant', '#tree', '#macrophotography',
-          '#cloud', '#plantstem', '#leaf', '#skin',
-          '#flora', '#photography', '#mouth',
-          '#nose', '#yellow', '#lilac', '#lavender',
-          '#violet', '#face', "#photography", '#petal',
-          '#eye', '#face', '#blackandwhite', '#sunlight']
+boring = ['#green',
+          '#blue',
+          '#black',
+          '#grass',
+          '#purple',
+          '#pink',
+          '#light',
+          '#sky',
+          '#white',
+          '#phenomenon',
+          '#tree',
+          '#water',
+          '#plant',
+          '#tree',
+          '#macrophotography',
+          '#cloud',
+          '#plantstem',
+          '#leaf',
+          '#skin',
+          '#flora',
+          '#photography',
+          '#mouth',
+          '#lip',
+          '#nose',
+          '#yellow',
+          '#lilac',
+          '#lavender',
+          '#violet',
+          '#face',
+          "#photography",
+          '#petal',
+          '#eye',
+          '#face',
+          '#blackandwhite',
+          '#sunlight',
+          '#textile',
+          '#design']
 
-bonus = ['#art', '#contemporaryart', '#painting', '#notart', '#botally',
-         '#abstract', '#abstractart', '#photograph', '#notaphotograph',
-         '#conceptualart', '#sift', '#notapainting']
+bonus = ['#art',
+         '#contemporaryart',
+         '#painting',
+         '#notart',
+         '#abstract',
+         '#abstractart',
+         '#photograph',
+         '#notaphotograph',
+         '#conceptualart',
+         '#sift',
+         '#notapainting']
 
 
 def image_generator(increment, counter):
-    '''generate a batch of images to send to net'''
+    ''' Generate a batch of batch_size images to send to net,
+    while incrementing counter. '''
     to_net = np.empty((batch_size, 32, 32, 3), 'float32')
     for i in range(batch_size):
         tr = dataset.get_transform(counter)
@@ -122,14 +160,16 @@ def image_generator(increment, counter):
 
 def Sift(increment=11999, restart=False):
     '''
-    non-visualized Sift program.  Runs omega images then stops, counting by
-    increment. Net checks them, candidates are saved to a folder named
-    found_images/ -- today's date & increment -- / ####.png
+    Non-visualized Sift program.  Generates images, counting each transform
+    cofficient by increment. Net checks them, candidates are saved here:
+    /found_images/--today's date + increment setting--/####.png
+
+    and optionally uploaded or tweeted
     '''
 
     ########################### setup ###########################  # noqa
 
-    last = 0          # last time an image was tweeted
+    last = 0          # last time an image was tweeted initially set to 0
 
     if not restart:
         print('Loading saved state...')
@@ -138,24 +178,26 @@ def Sift(increment=11999, restart=False):
                 counter = pickle.load(f)
                 images_found = pickle.load(f)
                 processed = pickle.load(f)
-                tweeted = pickle.load(f)
+                number_tweeted = pickle.load(f)
                 print('{} images found of {} processed; tweeted {}.'
-                      .format(images_found, processed*batch_size, tweeted))
+                      .format(images_found,
+                              processed*batch_size,
+                              number_tweeted))
 
         except FileNotFoundError:
             print('save.file does not exist. RESTARTING')
             counter = np.zeros((32, 32, 3), dtype='float32')
             images_found = 0
             processed = 0
-            tweeted = 0
+            number_tweeted = 0
     else:
         print('Warning: Restarting. Will save over existing save.file')
         counter = np.zeros((32, 32, 3), dtype='float32')
         images_found = 0
         processed = 0
-        tweeted = 0
+        number_tweeted = 0
 
-    # make dir found_images
+    # mkdir /found_images/date
     if not os.path.exists('found_images'):
         os.makedirs('found_images')
     directory = "".join(['found_images/', str(datetime.date.today()),
@@ -166,32 +208,35 @@ def Sift(increment=11999, restart=False):
 
 
     ########################### MAIN PROGRAM ################### noqa
-    # for each batch (n = batch_size) forever (ctrl-c to quit)...
+    # generate and analyze batches forever (ctrl-c to quit)
+
     while True:
         if processed % 100 == 0:
             print('processed {} batches of {}'.format(processed, batch_size))
-        tweeted = False   # current image was not tweeted
         processed += 1
 
-        # THIS IS IMPORTANT PART HERE ! ! ! !
+        # THIS IS IMPORTANT DESPITE BEING 2 LINES ! ! ! !
         # generate batch_size images
         data, counter = image_generator(increment, counter)
         ps = model.predict_on_batch(data)
 
         ########################### PER IMAGE ################# noqa
         for i in range(batch_size):
-            if ps[i, 1] < ps[i, 0]:   # probabilty of individual image <= 1:1
+            if ps[i, 1] < ps[i, 0]:   # if probabilty of image <= .5
                 continue
 
             images_found += 1
             probability = ps[i, 1]
+            tweeted = False   # current image is not tweeted
+            tweet = ''        # tweet not generated
             now = time.time()
             print('Image found: no.', images_found, ' at ', now)
 
-            # save images to .png with PIL
+            # save tiny images to .png with PIL
             image = dataset.net2pil(data[i])
             f = ''.join([str(images_found), '_', str(probability), '.png'])
-            image.save(os.path.join(directory, f))
+            basic_filepath = os.path.join(directory, f)
+            image.save(basic_filepath)
 
             time_since_last = now - last
             if time_since_last < 5:  # do API / file actions after delay
@@ -206,17 +251,17 @@ def Sift(increment=11999, restart=False):
             exp_im.resize((512, 512)).save('most_recent.png')
 
             ###################### UPLOAD ######################## noqa
-            if not(twitter_mode or siftapp_mode):
+            if not (twitter_mode or siftapp_mode):
                 continue
 
             ############## GOOGLE LABELS  ######################## noqa
             with open(os.path.join(directory, f), 'rb') as f:
+                content = f.read()
+
                 # get google image data
                 raw = ''
                 descrs = []
                 labels = {}
-
-                content = f.read()
 
                 try:
                     goog = vision_client.image(content=content)
@@ -225,8 +270,12 @@ def Sift(increment=11999, restart=False):
                               for label in raw}
 
                     # convert to hashtags because, social media?
-                    descrs = ['#{}'.format(key)
-                              for key in labels.keys() if key not in banned]
+                    if labels:
+                        descrs = ['#{}'.format(key)
+                                  for key in labels.keys()
+                                  if key not in banned]
+                    else:
+                        descrs = []
 
                 except:
                     print('Google api failed, not tweeting')
@@ -234,57 +283,64 @@ def Sift(increment=11999, restart=False):
             ############## TWITTER  ############################# noqa
             if twitter_mode:
                 # skip boring images: no label or all boring
-                if descrs == [] or all([d in boring for d in descrs]):
+                if descrs and not all([d in boring for d in descrs]):
                     # or (descrs[0] in boring and labels[0].score < .9):
-                    print('boring image, not tweeting it:', ' '.join(descrs))
-                    continue
 
-                # otherwise, compose some kind of list of things to tweet
-                bot = i % 100
-                if bot <= 3:
-                    descrs.append('@pixelsorter')
-                elif bot <= 5:
-                    descrs.append('@WordPadBot')
-                elif bot < 10:
-                    descrs.append('@poem_exe TOPIC FOR POEM')
-                elif bot < 15:
-                    descrs.append('@a_quilt_bot')
-                elif bot == 99:
-                    # spam mode
-                    my_fs = api.followers()
-                    u = my_fs[np.random.randint(0, len(my_fs))]
-                    u_fs = api.followers(u.screen_name)
-                    usr = u_fs[np.random.randint(0, len(u_fs))]
-                    at = usr.screen_name
-                    ds = ['@{} IS THIS YOUR IMAGE?'
-                          .format(at)] + descrs
+                    # otherwise, compose some kind of list of things to tweet
+                    bot = i % 100
+                    if bot <= 3:
+                        descrs.append('@pixelsorter')
+                    elif bot <= 5:
+                        descrs.append('@WordPadBot')
+                    elif bot < 10:
+                        descrs.append('@poem_exe TOPIC FOR POEM')
+                    elif bot < 15:
+                        descrs.append('@a_quilt_bot')
+                    elif bot == 99:
+                        # spam mode
+                        my_fs = api.followers()
+                        u = my_fs[np.random.randint(0, len(my_fs))]
+                        u_fs = api.followers(u.screen_name)
+                        usr = u_fs[np.random.randint(0, len(u_fs))]
+                        at = usr.screen_name
+                        descrs = ['@{} IS THIS YOUR IMAGE?'
+                                  .format(at)] + descrs
+                    else:
+                        for _ in range(3):
+                            r = np.random.randint(0, len(bonus))
+                            descrs.append(bonus[r])
+
+                    # make tweet, cap length
+                    tweet = '''IMAGE FOUND. #{} {}'''.format(str(images_found),
+                                                             ' '.join(descrs))
+                    if len(tweet) > 130:
+                        tweet = tweet[:110]
+
+                    try:
+                        print('\n### TWEETING:', tweet)
+                        api.update_with_media('most_recent.png', tweet)
+                        last = now
+                        number_tweeted += 1
+                        tweeted = True
+
+                    except:
+                        print('Tweet failed')
+
                 else:
-                    for _ in range(3):
-                        r = np.random.randint(0, len(bonus))
-                        ds.append(bonus[r])
-
-                # make tweet, cap length
-                tweet = '''IMAGE FOUND. #{} {}'''.format(str(images_found),
-                                                         ' '.join(ds))
-                if len(tweet) > 130:
-                    tweet = tweet[:110]
-
-                try:
-                    print('tweeting:', tweet)
-                    api.update_with_media('most_recent.png', tweet)
-                    last = now
-                    tweeted += 1
-                    tweeted = True
-
-                except:
-                    tweeted = False
-                    print('Tweet failed')
+                    print('boring image, not tweeting it:', ' '.join(descrs))
 
             ##################  sift-app  ############################# noqa
             if siftapp_mode:
-                upload('most_recent.png', "sift", 0, 1, "tweet", tweeted,
-                       google_raw_data=labels)
-                # TODO add raw_labels json field
+                upload(filepath=basic_filepath,
+                       source="sift nonvisual generated and id'd as image",
+                       correct_label=0,
+                       sift_label=1,
+                       probability=probability,
+                       net=str(sift_keras.savefile),
+                       description=" ".join(descrs),
+                       tweeted=tweeted,
+                       google_raw_data=json.dumps(labels))
+                # TODO make raw_labels json field
 
     ##################   SAVE   ############################### noqa
         # save progress every 500
@@ -293,39 +349,46 @@ def Sift(increment=11999, restart=False):
                 pickle.dump(counter, f)
                 pickle.dump(images_found, f)
                 pickle.dump(processed, f)
-                pickle.dump(tweeted, f)
+                pickle.dump(number_tweeted, f)
 
 
 def upload(filepath,
            source,
            correct_label,
            sift_label,
+           probability,
+           net,
            description,
            tweeted,
            uploaded_by=None,
-           google_raw_data=None):
+           google_raw_data=None,
+           local=False):
 
     '''POST request to your API with "files" key in requests data dict'''
 
     base_dir = os.path.expanduser(os.path.dirname(filepath))
+    file_name = os.path.basename(filepath)
 
     # hard-coded url for API upload
-    # url = 'http://localhost:8000/api/'
-    url = 'https://still-taiga-56301.herokuapp.com/api/'
+    if local:
+        url = 'http://127.0.0.1:8000/api/'
+    else:
+        url = 'https://siftsite.herokuapp.com/api/'
 
-    file_name = os.path.basename(filepath)
     with open(os.path.join(base_dir, file_name), 'rb') as f:
         print('uploading file:', base_dir, '/', file_name)
         POST_data = {'filename': file_name,
                      'source': source,
                      'correct_label': correct_label,
                      'sift_label': sift_label,
+                     'probability': probability,
+                     'net': net,
                      'description': description,
                      'tweeted': tweeted,
-                     'uploaded_by': uploaded_by,
-                     'google_raw_data': str(google_raw_data)}
-        files = {'filename': (file_name, f), 'file': file_name}
-        resp = requests.post(url, data=POST_data, files=files)
+                     'uploaded_by': uploaded_by,  # None or pk of user instance
+                     'google_raw_data': google_raw_data}
+        POST_files = {'filename': (file_name, f), 'file': file_name}
+        resp = requests.post(url, data=POST_data, files=POST_files)
         print(resp)
 
 
