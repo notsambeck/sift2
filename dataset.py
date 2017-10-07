@@ -17,29 +17,9 @@ np.set_printoptions(precision=1, suppress=True, linewidth=200,
 # from math import cos, pi
 
 
-def old_dct(x):
-    '''dct type 2 in 2D; image -> transform'''
-    out = np.empty((32, 32, 3), dtype='float32')
-    for ch in range(3):
-        out[:, :, ch] = scidct(scidct(x[:, :, ch], type=2,
-                                      norm='ortho', axis=0),
-                               type=2, norm='ortho', axis=1)
-    return out
-
-
 def dct(x):
     return scidct(scidct(x, type=2, norm='ortho', axis=1),
                   type=2, norm='ortho', axis=0)
-
-
-def old_idct(x):
-    '''dct type 3 in 2D; transform -> image'''
-    out = np.empty((32, 32, 3), dtype='float32')
-    for ch in range(3):
-        out[:, :, ch] = scidct(scidct(x[:, :, ch], type=3,
-                                      norm='ortho', axis=0),
-                               type=3, norm='ortho', axis=1)
-    return np.clip(out, 0, 255).astype('uint8')
 
 
 def idct(x):
@@ -71,10 +51,6 @@ def expand(im, scale_x=2):
                                type=3, norm='ortho', axis=1)
 
     return np.clip(out, 0, 255).astype('uint8')
-
-
-# omega is the number of samples to load or store in testing/training functions
-omega = 1000
 
 
 # LOAD CIFAR TRANSFORMS from pickle made in import_batch.makeTransforms:

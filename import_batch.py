@@ -134,6 +134,15 @@ class Dataset():
             self.add(capped, 1)
         self.visual_test()
 
+    def add_tiny_images(self, qty=100000):
+        '''ads qty images from tiny image dataset'''
+        for i in range(qty):
+            rgb = load_tiny(i)
+            ycc = dataset.make_pil(rgb, 'RGB')
+            capped = self._cap(ycc)
+            self.add(capped, 1)
+        self.visual_test()
+
     def add_generated(self, qty, increment=999):
         '''generates and adds transforms'''
         count = np.zeros((self.shape), dtype='float32')
@@ -299,3 +308,18 @@ def importCifar10(howmany=5):
                                                                 cifar10.min(),
                                                                 cifar10.max()))
     return cifar10
+
+
+# paths to various data files
+tiny_images_path = "../tiny_images/tiny_images.bin"
+
+img_count = 79302017
+
+
+def load_tiny(n=0):
+    '''load nth image from tiny_images_path'''
+    with open(tiny_images_path, 'rb') as f:
+        # imgs = np.empty((n, 32, 32, 3))
+        f.seek(3072*n)
+        return np.fromstring(f.read(3072), dtype='uint8')\
+                 .reshape((32, 32, 3), order='F')
