@@ -245,7 +245,7 @@ def Sift(increment=11999, restart=False):
 
             # save expanded/resized image to file
             arr = dataset.make_arr(image)
-            expanded = dataset.expand(arr)
+            expanded = dataset.expand(arr, scale_x=4)
             exp_im = dataset.make_pil(expanded, input_format='RGB',
                                       output_format='RGB')
             exp_im.resize((512, 512)).save('most_recent.png')

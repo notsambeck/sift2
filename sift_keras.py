@@ -40,13 +40,17 @@ model.compile(loss='categorical_crossentropy',
 
 orig_data = 'data/keras_dataset_300k_{}.pkl'   # 0-9
 import_batch_dset1 = 'data/import_batch_20170813_{}.pkl'  # 0-9
+includes_tiny_images = 'data/includes_tiny_images_{}.pkl'  # 0-9
 
 savefile = 'net/keras_net_v0_2017aug7.h5'
 filelist1 = [import_batch_dset1.format(i) for i in range(9)]
 filelist2 = [orig_data.format(i) for i in range(10)]
+filelist3 = [includes_tiny_images.format(i) for i in range(10)]
+
 testfile = 'data/import_batch_20170813_9.pkl'  # 0-9
 
-filelist = filelist1[:4] + filelist2[:5] + filelist1[4:] + filelist2[5:]
+filelist = filelist3[:5] + filelist2[:5] + filelist1[:5] +\
+           filelist3[5:] + filelist2[5:] + filelist1[5:]
 model.load_weights(savefile)
 
 
@@ -65,7 +69,7 @@ def train_net(load=savefile):
 
     print()
     for epoch in range(1000):
-        for chunk in permutation(filelist1):
+        for chunk in permutation(filelist):
             with open(chunk, 'rb') as f:
                 x = pickle.load(f)
                 y = pickle.load(f)
@@ -75,7 +79,7 @@ def train_net(load=savefile):
             if len(y.shape) == 1:
                 y = keras.utils.to_categorical(y, 2)
 
-            model.fit(x, y, epochs=3, batch_size=1000)
+            model.fit(x, y, epochs=1, batch_size=2000)
 
         print('trained epoch {}; testing...'.format(epoch))
         with open(testfile, 'rb') as f:
