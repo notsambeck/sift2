@@ -3,7 +3,8 @@ import keras
 from keras.models import Sequential
 from keras.layers import Conv2D, MaxPooling2D, Flatten
 from keras.layers import Dropout, Dense, Activation
-from numpy.random import permutation
+import numpy as np
+from numpy.random import permutation, randint
 import pickle
 import dataset
 import os
@@ -120,3 +121,45 @@ def predict_incorrect(filename=testfile, limit=100, output='save'):
 
     return 'of {} images, {} incorrect predictions'.format(len(prs),
                                                            incorrect)
+
+
+# paths to various data files
+tiny_images_path = "../tiny_images/tiny_images.bin"
+img_count = 79302017
+
+
+def load_tiny(n, show_expanded=False):
+    '''load nth image from tiny_images_path'''
+    with open(tiny_images_path, 'rb') as f:
+        # imgs = np.empty((n, 32, 32, 3))
+        f.seek(3072*n)
+        arr = np.fromstring(f.read(3072), dtype='uint8')\
+                .reshape((32, 32, 3), order='F')
+        if show_expanded:
+            dataset.make_pil(dataset.expand(arr), 'RGB').show()
+
+        return arr
+
+
+def check_real_image_detection(n=1000, chop=False):
+    to_net = np.empty((n, 32, 32, 3), 'float32')
+    for i in range(n):
+        r = randint(0, img_count - n)
+        rgb = load_tiny(r)
+        ycc = dataset.arr_r2y(rgb)
+        if chop:
+            tr = dataset.dct(ycc)
+            capped_tr = np.clip(tr, dataset.lowest, dataset.highest)
+            ycc = np.clip(dataset.idct(capped_tr), 0, 255)
+        to_net[i] = np.divide(np.subtract(ycc, 127.5), 127.5)
+
+    ps = model.predict(to_net)
+
+    wrong = 0
+    for i in range(n):
+        if ps[i, 0] > ps[i, 1]:
+            wrong += 1
+            dataset.net2pil(to_net[i]).show()
+
+    print('of {} random tiny_images, net missed {}'.format(n, wrong))
+    return wrong

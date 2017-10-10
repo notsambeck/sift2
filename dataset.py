@@ -28,7 +28,7 @@ def idct(x):
                    0, 255).astype('uint8')
 
 
-def expand(im, scale_x=2):
+def expand(im, scale_x=4):
     '''expand takes a 32x32x3 ndarray image and expands it by DCT/iDCT
     scale contrast to full range
     does not change colorspace'''
