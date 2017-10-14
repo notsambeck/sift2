@@ -211,7 +211,7 @@ def Sift(increment=11999, restart=False):
     # generate and analyze batches forever (ctrl-c to quit)
 
     while True:
-        if processed % 100 == 0:
+        if processed % 1000 == 0:
             print('processed {} batches of {}'.format(processed, batch_size))
         processed += 1
 
@@ -245,7 +245,7 @@ def Sift(increment=11999, restart=False):
 
             # save expanded/resized image to file
             arr = dataset.make_arr(image)
-            expanded = dataset.expand(arr, scale_x=4)
+            expanded = dataset.expand(arr, scale_x=np.random.choice([2, 4, 8]))
             exp_im = dataset.make_pil(expanded, input_format='RGB',
                                       output_format='RGB')
             exp_im.resize((512, 512)).save('most_recent.png')
