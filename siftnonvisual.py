@@ -169,7 +169,7 @@ def Sift(increment=11999, restart=False):
 
     ########################### setup ###########################  # noqa
 
-    last = 0          # last time an image was tweeted initially set to 0
+    last = datetime.datetime.now()     # last time an image was tweeted
 
     if not restart:
         print('Loading saved state...')
@@ -229,7 +229,7 @@ def Sift(increment=11999, restart=False):
             probability = ps[i, 1]
             tweeted = False   # current image is not tweeted
             tweet = ''        # tweet not generated
-            now = time.time()
+            now = datetime.datetime.now()
             print('Image found: no.', images_found, ' at ', now)
 
             # save tiny images to .png with PIL
@@ -238,7 +238,7 @@ def Sift(increment=11999, restart=False):
             basic_filepath = os.path.join(directory, f)
             image.save(basic_filepath)
 
-            time_since_last = now - last
+            time_since_last = (now - last).seconds
             if time_since_last < 5:  # do API / file actions after delay
                 print('sleep time...')
                 time.sleep(5-time_since_last)
