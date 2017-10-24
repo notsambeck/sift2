@@ -29,7 +29,7 @@ vision_client = vision.Client()
 
 # SETTINGS for twitter and siftapp
 
-siftapp_mode = True
+siftapp_mode = False
 
 twitter_mode = True
 
@@ -291,7 +291,7 @@ def Sift(increment=11999, restart=False):
                     if bot <= 3:
                         descrs.append('@pixelsorter')
                     elif bot <= 5:
-                        descrs.append('@WordPadBot')
+                        descrs.append('@Lowpolybot')
                     elif bot < 10:
                         descrs.append('@poem_exe TOPIC FOR POEM')
                     elif bot < 15:
