@@ -25,13 +25,19 @@ SIFT is built with many pre-existing tools, which can be found in requirements.t
 3. Make a directory, clone this repository from Github; cd into directory.
 With virtualenvwrapper installed and configured for python3:
     ~/$: mkproject sift
-    ~/source/sift$: git clone https://github.com/thesambeck/sift2
+and/or
+    ~/$: workon sift
+    ~/source/sift$: git clone https://github.com/thesambeck/sift2 .
     ~/source/sift$: cd sift2
 
 4. Install SIFT requirements (inside virtualenv) for Python 3 using PIP (you may have to type pip3 here)
-   pip install -r requirements.txt
+    pip install -r requirements.txt
+   
+5. Decompress neural net weights .h5 file (unless you want to train up your own network; if you don't need the 68MB net_{current_version}.h5 file you, can clone the no_net_files branch). This file is compressed because otherwise it exceeds the github 100MB file size limit.
+    ~/source/sift$: cd net
+    ~/source/sift/net$: gzip -d keras_net_v0_2017aug7.h5.gz
 
-5. Edit parameters to your liking inside the relevant file, either
+6. Edit parameters to your liking inside the relevant file, either
 sift.py (for visualizations)
 or
 siftnonvisual.py (for rapid computation)
@@ -48,4 +54,4 @@ python sift-nonvisual.py
 
 ### This should get you started. Happy sifting!
 
-![Image sample](https://github.com/notsambeck/sift2/most_recent.png)
+![Most recent SIFT image sample](https://github.com/notsambeck/sift2/blob/master/most_recent.png)
