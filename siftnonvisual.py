@@ -19,19 +19,19 @@ import dataset
 import sift_keras
 from sift_keras import model
 
-import tweepy
-from secret import consumerSecret, consumerKey
-from secret import accessToken, accessTokenSecret
+twitter_mode = False
 
-from google.cloud import vision
-vision_client = vision.Client()
+if twitter_mode:
+    import tweepy
+    from secret import consumerSecret, consumerKey
+    from secret import accessToken, accessTokenSecret
+
+    from google.cloud import vision
+    vision_client = vision.Client()
 
 
-# SETTINGS for twitter and siftapp
+siftapp_mode = False   # connection to sift Django web app
 
-siftapp_mode = False
-
-twitter_mode = True
 
 if twitter_mode:
     # secret.py is in .gitignore, stores twitter login keys as str
