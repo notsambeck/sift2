@@ -42,16 +42,16 @@ pip install -r requirements.txt
 ~/source/sift/net$: gzip -d keras_net_v0_2017aug7.h5.gz
 ```
 
-6. Edit parameters to your liking inside the relevant file, either `sift.py` (for visualizations) or `siftnonvisual.py` (for rapid computation)
+6. Edit parameters to your liking inside the relevant file: `sift.py` (for visualizations), `siftnonvisual.py` (for rapid computation), or `dataset.py` (lower level tools & image generator).
 
-For siftnonvisual, **turn twitter-mode off**, or you will get errors from google-cloud (used for generating tweet text) until you have configured it.
+For siftnonvisual, **turn twitter-mode off**, or you will get errors from google-cloud (their API is used for generating tweet text and object recognition) until you have configured it.
 
-The SIFT team has been running 999 as increment internally; use a different number to avoid duplicating work. You also can change: screen size, save/file preferences, and the range of the transform generator function (i.e. contrast) with relative ease.
+The SIFT team has been running 999 as increment internally; use a different seed to avoid duplicating work! You also can change: screen size for sift.py, save/file/output preferences, and the range of the transform generator function (i.e. contrast) with relative ease.
 
 5. Run SIFT (visualized or not) in Python 3:
 ```python sift.py```
 OR
-```python sift-nonvisual.py```
+```python siftnonvisual.py```
 
 
 ### This should get you started. Happy sifting!
