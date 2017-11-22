@@ -6,7 +6,8 @@ python:
 
 install:
  - pip install Cython
- - pip install -r requirements.txt
+ - pip install -r .travis_req.txt
+ - pip install -r test_requirements.txt
 
 script:
  - pytest
