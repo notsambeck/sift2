@@ -116,7 +116,9 @@ class Dataset():
         self.visual_test()
 
     def add_cifar(self, qty=100000):
-        '''adds CIFAR images (default qty=1000000) to dataset, capped/orig'''
+        '''
+        adds 2 * qty CIFAR images to dataset - both capped & original versions
+        '''
         print('loading cifar datasets...')
         cifar = np.append(importCifar10(), importCifar100(), axis=0)
         print('done')
@@ -180,9 +182,13 @@ class Dataset():
             dataset.show_data(self.data, i)
             print(i, '=>', self.labels[i])
 
-    def save_dataset(self, filename, chunks=10, confirm=True):
+    def save(self, filename, chunks=10, confirm=True):
+        '''
+        Enter a simple name for your dataset; save writes it to data directory
+        as #(chunks) .pkl files. Extension/location are added automatically.
+        '''
         if '.' in filename:
-            raise NameError('filename has _no.pkl added automatically.')
+            raise NameError('Use simple name, data/{filename}_0.pkl is added.')
         # data broken into chunks:
         if confirm and not self.just_shuffled:
             print('dataset not shuffled')

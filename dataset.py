@@ -11,27 +11,26 @@ from scipy.fftpack import dct as scidct
 np.set_printoptions(precision=1, suppress=True, linewidth=200,
                     edgeitems=6, threshold=128)
 
-# import_batch is a SIFT toolset for loading pickled sets of images
-# useful for testing and retraining network:
-# import import_batch
-# from math import cos, pi
-
 
 def dct(x):
+    '''DCT II for SIFT images, from scipy fft'''
     return scidct(scidct(x, type=2, norm='ortho', axis=1),
                   type=2, norm='ortho', axis=0)
 
 
 def idct(x):
+    '''DCT III (inverse DCT) for SIFT images'''
     return np.clip(scidct(scidct(x, type=3, norm='ortho', axis=0),
                           type=3, norm='ortho', axis=1),
                    0, 255).astype('uint8')
 
 
 def expand(im, scale_x=4):
-    '''expand takes a 32x32x3 ndarray image and expands it by DCT/iDCT
-    scale contrast to full range
-    does not change colorspace'''
+    '''expand takes a 32x32x3 ndarray image and expands it by scale_x
+    using DCT/iDCT. Also scales contrast to full range.
+
+    NOTE: does not change colorspace
+    '''
     newsize = scale_x * 32
 
     tr = dct(im)
@@ -251,11 +250,11 @@ def vec2int(vector):
     return out
 
 
-def random_transform(mean=cmean, std_dev=cstd, sigma=1):
+def random_transform(mean=cmean, std_dev=cstd, sigma=.5):
     # generates YCC transform according to normal distribution
     # between two limit matrices generated from CIFAR
     out = np.empty((32, 32, 3), dtype='float32')
     rando = np.random.normal(loc=0, scale=sigma,
                              size=(32, 32, 3))
     out = np.add(mean, np.multiply(std_dev, rando))
-    return out
+    return out.astype('float32')

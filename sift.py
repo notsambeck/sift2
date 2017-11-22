@@ -1,5 +1,7 @@
-# Image reader and generator for SIFT
-# visualized with Kivy
+'''
+Image generator and evalutator
+visualized with Kivy
+'''
 
 from kivy.app import App
 from kivy.uix.widget import Widget
@@ -18,19 +20,20 @@ from PIL import Image
 import os
 import datetime
 
-from sift_keras import model
+from sift_keras import model, savefile
 
-model.load_weights('net/keras_net_v0_2017aug7.h5')
+model.load_weights(savefile)
 
 
 increment = 29177
 
-imageSize = 32  # number of 'pixels' in generated images
-scale = 27      # number of screen pixels per SIFT pixel
+imageSize = 32  # number of 'pixels' in generated images; 32 is baked in
+scale = 27      # number of screen pixels per SIFT pixel, can change
 
-padX = 60
+padX = 60       # center image for your screen resolution
 padY = 80
 
+# devMode provides more output and statistics for debugging/development
 devMode = False
 if devMode:
     (cifarMaxTransform, cifarMeanTransform, cifarMinTransform,
@@ -41,6 +44,7 @@ else:
 
 
 class SiftWidget(Widget):
+    '''Kivy widget that displays SIFT images as they are generated'''
     counter = np.zeros((32, 32, 3), dtype='float32')
     images_found = NumericProperty(0)
     images_shown = NumericProperty(0)
@@ -157,6 +161,9 @@ class SiftWidget(Widget):
 
 
 class SiftApp(App):
+    '''
+    Kivy app containing Sift widget
+    '''
 
     def build(self):
         sift = SiftWidget()
