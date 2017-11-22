@@ -1,6 +1,6 @@
 # SIFT
 
-![travis build status]https://www.travis-ci.org/notsambeck/sift2.svg?branch=master
+![travis build status](https://www.travis-ci.org/notsambeck/sift2.svg?branch=master)
 
 ### SIFT is a visual experiment. It has two parts:
 

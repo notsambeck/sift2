@@ -5,7 +5,7 @@ python:
  - "3.6"
 
 install:
- - pip install Cython
+ - pip install -I Cython==0.23
  - pip install -r requirements.txt
  - pip install -r test_requirements.txt
 
