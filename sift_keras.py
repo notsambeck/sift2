@@ -1,4 +1,9 @@
-# load / train keras / tensorflow model
+'''
+sift_keras is a module that defines the Keras neural net used by Sift,
+provides functions to train the net,
+and allows import by other modules.
+'''
+
 import keras
 from keras.models import Sequential
 from keras.layers import Conv2D, MaxPooling2D, Flatten
@@ -8,9 +13,13 @@ from numpy.random import permutation, randint
 import pickle
 import dataset
 import os
-# import h5py # library is needed; import is not
+# import h5py  # h5py library is required, but import is not
+
+# current neural net weights file for saving and loading
+savefile = 'net/keras_net_v0_2017aug7.h5'
 
 
+# define Keras convnet; compile model
 model = Sequential()
 
 model.add(Conv2D(32, (5, 5), padding='same', input_shape=(32, 32, 3),
@@ -39,20 +48,22 @@ model.compile(loss='categorical_crossentropy',
               optimizer=opt,
               metrics=['accuracy'])
 
-orig_data = 'data/keras_dataset_300k_{}.pkl'   # 0-9
-import_batch_dset1 = 'data/import_batch_20170813_{}.pkl'  # 0-9
+
+model.load_weights(savefile)  # load existing weights
+
+# dataset.py and import_batch.py provide tools for creating these datasets
+# using CIFAR and tiny image dataset
+orig_data = 'data/keras_dataset_300k_{}.pkl'               # 0-9
+import_batch_dset1 = 'data/import_batch_20170813_{}.pkl'   # 0-9
 includes_tiny_images = 'data/includes_tiny_images_{}.pkl'  # 0-9
 
-savefile = 'net/keras_net_v0_2017aug7.h5'
 filelist1 = [import_batch_dset1.format(i) for i in range(9)]
 filelist2 = [orig_data.format(i) for i in range(10)]
 filelist3 = [includes_tiny_images.format(i) for i in range(10)]
 
-testfile = 'data/import_batch_20170813_9.pkl'  # 0-9
+testfile = 'data/import_batch_20170813_9.pkl'
 
-filelist = filelist3[:5] + filelist2[:5] + filelist1[:5] +\
-           filelist3[5:] + filelist2[5:] + filelist1[5:]
-model.load_weights(savefile)
+filelist = filelist1 + filelist2 + filelist3
 
 
 def train_net(load=savefile):
@@ -63,7 +74,7 @@ def train_net(load=savefile):
         try:
             model.load_weights(load)
         except:
-            input('WARNING: failed to load weights but will overwrite file {}'
+            input('Warning: failed to load weights; will write to file {}'
                   .format(savefile))
     else:
         print('WARNING: not saving progress.')
@@ -93,6 +104,11 @@ def train_net(load=savefile):
 
 
 def predict_incorrect(filename=testfile, limit=100, output='save'):
+    '''
+    load a pickle file containing images and labels;
+    output up to *limit* images according to mode output
+    that are miscategorized by model
+    '''
     with open(filename, 'rb') as f:
         x = pickle.load(f)
         y = pickle.load(f)  # integer 0/1
@@ -117,10 +133,12 @@ def predict_incorrect(filename=testfile, limit=100, output='save'):
                 im.save(os.path.join('incorrect/keras', str(y[i]), filename))
 
         if incorrect == limit:
-            return 'limit reached at i={}'.format(i)
+            print('limit reached at i={}'.format(i))
+            return False
 
-    return 'of {} images, {} incorrect predictions'.format(len(prs),
-                                                           incorrect)
+    print('of {} images, {} incorrect predictions'.format(len(prs),
+                                                          incorrect))
+    return True
 
 
 # paths to various data files
@@ -142,6 +160,9 @@ def load_tiny(n, show_expanded=False):
 
 
 def check_real_image_detection(n=1000, chop=False):
+    '''
+    test precision of neural net by testing against only real images
+    '''
     to_net = np.empty((n, 32, 32, 3), 'float32')
     for i in range(n):
         r = randint(0, img_count - n)

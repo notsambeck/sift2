@@ -1,6 +1,8 @@
 # SIFT
 
-## SIFT is a visual experiment. 
+![travis build status](https://www.travis-ci.org/notsambeck/sift2.svg?branch=master)
+
+### SIFT is a visual experiment. It has two parts:
 
 1. SIFT systematically generates every possible image
 2. A neural network evaluates each image to determine if it is interesting or not.

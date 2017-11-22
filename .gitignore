@@ -2,7 +2,11 @@
 *.pkl
 *.nn
 *~
-*/
+assemblies/
+data/
+incorrect/
+found_images/
+__pycache__
 secret.py
 google.json
 WORKON_HOME
