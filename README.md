@@ -27,7 +27,7 @@ As of November 2017, over 10^10 images have been generated and analyzed. None ha
 
 1. Install python3, git (and optionally virtualenv + virtualenvwrapper) globally
 
-2. Requirements.txt lists tensorflow-gpu as a requirement. This requires an Nvidia GPU with CUDA support, plus installing CUDA and libcudnn. **To skip this installation, remove `-gpu (1.3.0)` from that line in `requirements.txt`**; tensorflow will then run on CPU. Alternatively, install tensorflow from source for performance gains.
+2. Tensorflow is a requirement (runs neural net). Requirements lists the vanilla version, but installing with GPU support and building from source can provide significant performance gains. 
 
 3. Clone repository from Github. With virtualenvwrapper installed _and configured for python3_:
 ```bash
@@ -37,7 +37,7 @@ and/or
 ~/source/sift$: git clone https://github.com/thesambeck/sift2 .
 ```
 
-4. Install SIFT requirements (inside virtualenv) for Python 3 using PIP (you may have to type pip3 here)
+4. Install SIFT requirements (inside virtualenv) for Python 3 using PIP (you may have to type pip3 here). If an error about Cython appears, you may be able to simply `pip install -I Cython==0.23`, then attempt to install the requirements again.
 ```bash
 pip install -r requirements.txt
 ```
@@ -53,7 +53,7 @@ t_v0_2017aug7.h5.gz
 
 For siftnonvisual, **turn twitter-mode off**, or you will get errors from google-cloud (their API is used for generating tweet text and object recognition) until you have configured it.
 
-The SIFT team has been running 999 as increment internally; use a different seed to avoid duplicating work! You also can change: screen size for sift.py, save/file/output preferences, and the range of the transform generator function (i.e. contrast) with relative ease.
+The SIFT team has been running 999 and 11999 as increment internally; use a different seed to avoid duplicating work. Or, better yet, change the parameter for `quantization` in the module `dataset`, which will put your instance on a divergent path. One can also adjust: screen size (for `sift.py`), save/file/output preferences, and the range of the transform generator function (i.e. contrast) with relative ease.
 
 5. Run SIFT (visualized or not) in Python 3:
 ```python sift.py```
