@@ -34,7 +34,7 @@ As of November 2017, over 10^10 images have been generated and analyzed. None ha
 3. Clone repository from Github. With virtualenvwrapper installed (_configured for python3_) the following works:
 ```bash
 ~/$: mkproject sift
-~/sift$: git clone https://github.com/thesambeck/sift2 .
+~/sift$: git clone https://github.com/notsambeck/sift2 .
 ```
 
 4. Install SIFT requirements (inside virtualenv) for Python 3 using PIP (you may have to type pip3 here). If an error about Cython appears, you may be able to simply `pip install -I Cython==0.23`, then attempt to install the requirements again.
