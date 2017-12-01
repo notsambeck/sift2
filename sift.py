@@ -1,6 +1,7 @@
 '''
-Image generator and evalutator
+SIFT image generator and evaluator
 visualized with Kivy
+evaluated with Keras (tensorflow) neural net
 '''
 
 from kivy.app import App
@@ -171,7 +172,8 @@ class SiftApp(App):
         return sift
 
 
-def Sift():
+def sift():
+    # for interactive use
     SiftApp().run()
 
 
